@@ -1,0 +1,88 @@
+S POETRY
+by Patrick J. Burns
+
+Chapter 16: Esoterics
+
+16.1 Magnitude
+16.2 Dostoevsky
+16.3 Things to Do
+16.4 Further Reading
+
+
+Where we sail off the edge.
+
+16.1 Magnitude
+
+We have come all this way without a theorem, I now eliminate the deficiency.
+
+Theorem 1 An S object with at least one attribute consumes an infinite amount of space.
+
+Proof: The demonstration uses the in-built matrix freeny.x, but the particular object — as long as it has an attribute — is immaterial. Consider the sequence:
+
+> attributes(attributes(freeny.x))
+$names:
+[1] "dim"      "dimnames"
+> attributes(attributes(attributes(freeny.x)))
+$names:
+[1] "names"
+> attributes(attributes(attributes(
++         attributes(freeny.x))))
+$names:
+[1] "names"
+
+Obviously this continues ad infinitum so the size of the object is bounded below by:
+
+> object.size(attributes(attributes(attributes(
++         freeny.x)))) * Inf
+[1] Inf
+
+Q.E.D. ♠
+
+16.2 Dostoevsky
+
+Twice-two-makes-four is a farcical, dressed-up fellow who stands across your path with arms akimbo and spits at you. Mind you, I quite agree that twice-two-makes-four is a most excellent thing; but if we are to give everything its due, then twice-two-makes-five is sometimes a most charming little thing, too.
+
+Fyodor Dostoevsky Notes from the Underground translated by David Magarshack
+
+The object of the game is to make twice two equal five.
+
+My first method is rather cheap and unsatisfactory. It gives the required answer:
+
+>2*2 [1] 5
+
+but is clumsy elsewhere.
+
+> 2 * 0:9
+[1] 1 3 5 7 91113151719
+
+Here’s the adjustment:
+
+> get("*")
+function(e1, e2)
+.Internal(e1 * e2, "do_op", T, 4) + 1
+
+The next attempt is slightly better, though it goes to the bother of writing a new function.
+
+> twice(2)
+[1] 5
+> twice(1:9)
+[1] 2 5 6 81012141618
+
+Behind the scenes is a little work involving two’s and five’s:
+
+"twice" <- function(x)
+{
+        2 * x + dnorm(x - 2, sd = 1/sqrt(2 * pi)/5)/5
+}
+
+This definition of twice gives answers close to the usual except for inputs close to 2.
+
+16.3 Things to Do
+
+Make 2 ∗ 2 = 5.
+
+Develop a topology for S objects.
+
+16.4 Further Reading
+
+Catch-22 by Joseph Heller.

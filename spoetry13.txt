@@ -1,0 +1,1021 @@
+S POETRY
+by Patrick J. Burns
+
+Chapter 13: Formulas
+
+13.1 Lazy Evaluation
+13.2 Manipulating Formulas
+13.3 Mathematical Graphs
+13.4 Things to Do
+13.5 Further Reading
+
+
+Formulas provide a mechanism for giving a function an arbitrarily complex input. It is never necessary to have a function take a formula—the same func- tionality can be achieved through other means—however, formulas can offer a clean interface to the user.
+A formula is a call to the tilde operator. This operator does essentially nothing—the result is a call to the operator that has class "formula". A brief explanation of this is on page 203.
+Many of the modeling functions use the terms function which digests a formula. Although terms is useful in many situations, it is not necessary to use it with formulas—the mathematical graph example later in this chapter, for instance, does not use terms.
+13.1 Lazy Evaluation
+Formulas are the main trouble spot with lazy evaluation. Formulas have their own form of lazy evaluation that is distinct from but similar to the lazy evalu- ation of function arguments. The contents of a formula are not evaluated when the formula is evaluated. It is only when the data are really needed that eval- uation will happen, and this can happen an arbitrary number of frames away from where the formula is given.
+Here is a simplified example of how the problem might arise. We create a formula containing x and y in our function where they are perfectly behaved objects. However, the formula is passed to another function where it is actually used.
+"fjjlz1"<-
+function(x, y)
+{
+291
+292
+}
+CHAPTER 13. FORMULAS
+}
+subfun <- function(form)
+{
+lm(form)
+}
+form <- y ~ x
+subfun(form)
+The result is none too good. By the time the variables within the formula are needed, S doesn’t know the proper place to look for them.
+> fjjlz1(jjx, jjy)
+Error in subfun(form): Object "y" not found
+Dumped
+There are a couple of remedies. One is to make global variables of those that appear in the formula.
+"fjjlz2"<-
+function(x, y)
+{
+subfun <- function(form)
+{
+lm(form)
+}
+form <- y ~ x
+assign("x", x, frame = 1)
+assign("y", y, frame = 1)
+subfun(form)
+We get an answer instead of an error.
+> fjjlz2(jjx, jjy)
+Call:
+lm(formula = form)
+Coefficients:
+ (Intercept)        x1        x2
+    0.476645 0.9723329 -0.248944
+Degrees of freedom: 10 total; 7 residual
+Residual standard error: 0.4326354
+Perhaps the preferred solution is to keep the data and the formula together. The statistical modeling functions that take formulas expect a data frame of data.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+13.1. LAZY EVALUATION 293
+"fjjlz3"<-
+function(x, y)
+{
+}
+subfun <- function(form, df)
+{
+        lm(form, data = df)
+}
+form <- y ~ x
+df <- data.frame(x = x, y = y)
+subfun(form, df)
+Now we try it.
+> fjjlz3(jjx, jjy)
+Error in subfun(form, df): Object "x" not found
+Dumped
+This would be the preferred technique if it worked. Let’s use debugger to see where the trouble lies.
+> debugger()
+Message: Object "x" not found
+1:
+2: fjjlz3(jjx, jjy)
+3: subfun(form, df)
+4: lm(form, data = df)
+5: eval(m, sys.parent())
+6: model.frame.default(formula = form, data = df)
+7: subfun(form, df)
+Selection: 2
+Frame of fjjlz3(jjx, jjy)
+d(2)> ?
+1: df
+2: y
+3: x
+4: form
+5: subfun
+d(2)> df
+   x.1         x.2         y
+ 1   1  0.07007709  1.569356
+ 2   2 -0.53393595  2.983659
+ 3   3 -0.03948787  3.366048
+ 4   4  0.49557847  3.768500
+ 5   5  0.23720871  5.634129
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+294 CHAPTER 13. FORMULAS
+ 6   6 -0.25087103  5.722343
+ 7   7 -1.16859131  7.272687
+ 8   8  1.92886521  7.657451
+ 9   9  1.00915360  9.374802
+10  10 -1.23286270 10.767544
+The problem is that data.frame doesn’t put a matrix in as a single item, but makes a column for each column of the matrix. (Usually this is the desired behavior, but obviously not always.)
+"fjjlz4"<-
+function(x, y)
+{
+        subfun <- function(form, df)
+        {
+                lm(form, data = df)
+        }
+        form <- y ~ x
+        df <- data.frame(y = y)
+        df$x <- x
+        subfun(form, df)
+}
+This new version presumes that y will be a vector, and then puts x into the
+data frame “by hand” in case it is a matrix. Now, once again we get an answer.
+> fjjlz4(jjx, jjy)
+Call:
+lm(formula = form, data = df)
+Coefficients:
+ (Intercept)        x1        x2
+    0.476645 0.9723329 -0.248944
+Degrees of freedom: 10 total; 7 residual
+Residual standard error: 0.4326354
+There is another mechanism for passing the data along with the formula since modeling functions typically take an integer indicating the frame in which the objects are to be found as well as a data frame of the objects. (Thus the dual use of the word “frame”.) Here’s our function to do that.
+"fjjlz5"<-
+function(x, y)
+{
+        subfun <- function(form, df)
+        {
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+13.1. LAZY EVALUATION 295 lm(form, data = df)
+        }
+        form <- y ~ x
+        subfun(form, sys.nframe())
+}
+We want to point to the frame of fjjlz5. Even though the sys.nframe() is inside the call to subfun, it is evaluated in the frame of fjjlz5 so it is correct. A call to sys.frame (giving the frame rather than just the frame number) would work also. An alternative way of doing it would have been to have the command inside subfun be:
+                lm(form, data = sys.parent())
+Now for the test of the function.
+> fjjlz5(jjx, jjy)
+Error in model.matrix.default(Terms, ..: Invalid data.\
+        class(x) ("argument")
+Dumped
+This is a problem with the lazy evaluation of arguments. The mode of something from the formula is still argument—meaning it hasn’t been evaluated yet— rather than something that a numerical routine might be happy with. So we fix things up.
+"fjjlz6"<-
+function(x, y)
+{
+        subfun <- function(form, df)
+        {
+                lm(form, data = df)
+        }
+        x <- x
+        eval(y)
+        form <- y ~ x
+        subfun(form, sys.frame())
+}
+Both x and y need to be evaluated. This uses one method for each. And
+assigning a variable to itself does indeed make a difference.
+> fjjlz6(jjx, jjy)
+Call:
+lm(formula = form, data = df)
+Coefficients:
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+296 CHAPTER 13. FORMULAS (Intercept) x1 x2
+    0.476645 0.9723329 -0.248944
+Degrees of freedom: 10 total; 7 residual
+Residual standard error: 0.4326354
+13.2 Manipulating Formulas
+A formula need not have a left-hand (response) side. In operator terms, the tilde can be either unary or binary.
+A formula is really an object of mode call (the call is to the tilde operator). The first component of a call is the function, and subsequent components are the arguments. Thus, when both sides of the formula are given, then the formula has length 3—the second component is the left-hand side and the third component is the right-hand side. When only the right-hand side is given, the formula has length 2, and the second component contains the right-hand side.
+A common operation is to add the left-hand side to a formula if it doesn’t exist—the following code does this, where form is a formula:
+if(length(form) == 2) {
+     form[[3]] <- form[[2]]
+     form[[2]] <- as.name("z")
+}
+This code puts the component originally in the second position into a new third component, then changes the second component. The second and third components of a formula should be either of mode name or of mode call.
+The operators in formulas often have a special meaning. For example in
+y ~ x1 + x2
+x1 is not being added to x2—it is that both are to be included. If you use a formula that is given to the terms function, then the “hat” operator as well as addition is special. The formula
+y ~ x^2
+will not be interpreted as the square of x. If that is what you want, then write:
+y ~ I(x^2)
+The I construct means to interpret functions in the usual sense of S rather than the “formula” sense.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+13.3. MATHEMATICAL GRAPHS 297 13.3 Mathematical Graphs
+A mathematical graph is a collection of nodes (also called vertices), and a collection of edges that each connect two of the nodes. Edges can be either directed or undirected. A graph that contains only directed edges is called a directed graph.
+The mathgraph function creates an object representing a mathematical graph. The form of the graph is given to mathgraph via a formula. Obviously a graph can be arbitrarily complex, so it makes some sense to use a formula to describe it.
+Let’s start with some examples.
+> mathgraph(~ 1:3 / 2:4)
+[1]  node 1 <-> node 2
+[2]  node 2 <-> node 3
+[3]  node 3 <-> node 4
+class: mathgraph
+> mathgraph(~ 1:3 * 2:4)
+[1]  node 1 <-> node 2
+[2]  node 2 <-> node 2
+[3]  node 3 <-> node 2
+[4]  node 1 <-> node 3
+[5]  node 2 <-> node 3
+[6]  node 3 <-> node 3
+[7]  node 1 <-> node 4
+[8]  node 2 <-> node 4
+[9]  node 3 <-> node 4
+class: mathgraph
+> mathgraph(~ 1:3 / 4)
+[1]  node 1 <-> node 4
+[2]  node 2 <-> node 4
+[3]  node 3 <-> node 4
+class: mathgraph
+This displays the two main operators in mathgraph formulas. The slash operator connects each element in the first vector with the corresponding element in the second—as the last example shows, the usual replication rules hold. The star operator makes a star by connecting each element of the first vector with all of the elements in the second.
+There is also the plus operator that concatenates the terms together.
+>  mathgraph(~ 1:3 / 2:4 + mathgraph(~ c(3,1) / c(2,4), dir=T))
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+298 CHAPTER 13.
+[1]  node 1 <-> node 2
+[2]  node 2 <-> node 3
+[3]  node 3 <-> node 4
+[4] node3 ->node2
+[5] node1 ->node4
+class: mathgraph
+FORMULAS
+This example shows that a term can not only be a call to * or /, but also it can be another mathgraph object. In this case, the second term is of a directed graph.
+The nodes need not be numbers, they can be character strings also.
+> mathgraph(~ state.name[2:4] * state.name[12:13])
+[1]   Alaska <->  Idaho
+[2]   Arizona <->  Idaho
+[3]   Arkansas <->  Idaho
+[4]   Alaska <->  Illinois
+[5]   Arizona <->  Illinois
+[6]   Arkansas <->  Illinois
+class: mathgraph
+Here is the definition of the mathgraph function.
+"mathgraph"<-
+function(formula, directed = F, data = sys.parent())
+{
+}
+if(missing(formula)) {
+        ans <- NULL
+}
+else {
+ans <- build.mathgraph(formula, data
+         = data)
+adir <- attr(ans, "directed")
+adir[is.na(adir)] <- directed
+attr(ans, "directed") <- adir
+}
+class(ans) <- "mathgraph"
+ans
+First, we allow the possibility of an empty graph. The real work is done by build.mathgraph, then a few additions are put on. The directed argument allows the edges that are created to be either directed or undirected. The data argument provides a way around problems with lazy evaluation as discussed on page 291.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+13.3. MATHEMATICAL GRAPHS 299 The build.mathgraph function looks like:
+"build.mathgraph"<-
+function(formula, data)
+{
+        cterm <- deparse(formula[[2]])
+        allterms <- unpaste(cterm, sep = "+")
+        ans <- NULL
+        adir <- logical(0)
+        for(i in seq(along = allterms)) {
+                raw <- allterms[[i]]
+                this.parse <- parse(text = raw)
+                if(length(this.parse[[1]]) == 1) {
+}
+else {
+this.op <- " "
+this.op <- as.character(this.parse[[1]][[1]])
+}
+switch(this.op,
+        "/" = {
+                e1 <- eval(this.parse[[1]][[2]], data)
+                e2 <- eval(this.parse[[1]][[3]], data)
+                this.ev <- cbind(e1, e2)
+                ans <- rbind(ans, this.ev)
+                adir <- c(adir, rep(NA, dim(this.ev)[1]))
+}
+,
+"*" = {
+} , {
+}
+e1 <- eval(this.parse[[1]][[2]], data)
+e2 <- eval(this.parse[[1]][[3]], data)
+e1 <- unique(e1)
+e2 <- unique(e2)
+le1 <- length(e1)
+le2 <- length(e2)
+e1 <- e1[rep(1:le1, le2)]
+e2 <- e2[rep(1:le2, rep(le1, le2))]
+this.ev <- cbind(e1, e2)
+ans <- rbind(ans, this.ev)
+adir <- c(adir, rep(NA, dim(this.ev)[1]))
+this.ev <- eval(this.parse, data)
+if(inherits(this.ev, "mathgraph")) {
+  ans <- rbind(ans, this.ev)
+  adir <- c(adir, attr(this.ev, "directed"))
+}
+else stop(paste(
+    "do not know how to handle term:", raw))
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+300
+}
+CHAPTER 13.
+FORMULAS
+} }
+)
+}
+attr(ans, "directed") <- adir
+ans
+This breaks a character representation of the formula into the individual terms, then creates the representation for each term. It represents the graph with a two-column matrix where each row stands for an edge and the entries are the two nodes connected by the edge.
+The print method for mathgraph produces a fairly clear representation of the graph that also matches the structure of the object quite closely.
+"print.mathgraph"<-
+function(x, prefix.node = if(is.character(xu)) ""
+{
+ else "node", ...)
+if(length(unclass(x))) {
+        xu <- unclass(x)
+        if(length(the.nams <- names(x))) {
+                the.nams <- paste(justify(
+}
+else {
+}
+else {
+        the.nams, "r"), " ",
+        sep = "")
+the.nams <- paste("[", format(
+        1:length(x)), "] ",
+sep = "")
+}
+out <- paste(the.nams, prefix.node, xu[
+        , 1], ifelse(attr(x,
+        "directed"), " ->", "<->"),
+        prefix.node, xu[, 2])
+cat(out, sep = "\n")
+cat("\nclass:", class(x), "\n")
+        cat("mathgraph()\n")
+invisible(x)
+As always, if the last line of a print method is not invisible(x), then it is wrong. This essentially just pastes the nodes for each edge together with a symbol for the directions of the edge between. Some of the code (including the call to justify which is given on page 278) refers to the names of the graph—
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+13.3. MATHEMATICAL GRAPHS 301 we will get to names shortly. Another part of the code indicates numerical
+subscripting which we will also get to later. Let’s be a little more adventurous.
+> jj1 <- 1:3
+> mathgraph(~ jj1 * jj1+1)
+Error in switch(this.op,: do not know how to handle
+        term:  1
+Dumped
+The statement above doesn’t work, and it shouldn’t. The intention there was to add one to each of the numbers in jj1, but the plus sign is interpreted as introducing a second term in the formula rather than as performing addition. The way around this is to surround operations that are to be interpreted in the usual sense instead of the formula sense with a call to I.
+> mathgraph(~ jj1 * I(jj1+1))
+Syntax error: end.of.file ("\n") used illegally at this point:
+jj1 * I(jj1
+Dumped
+However, this doesn’t give us much satisfaction either. Actually, this doesn’t even come close—the formula is broken into pieces between plus signs, so we end up with something that doesn’t even parse.
+We need to revise build.mathgraph to handle I. Here is the first part of the revised version of build.mathgraph.
+function(formula, data)
+{
+        cterm <- paste(collapse = "", deparse(formula[[2]]))
+        eyes <- find.I.of(cterm)
+        if(length(eyes)) {
+# calls to I() need to be evaluated
+                nI <- nrow(eyes)
+                Inames <- paste("Build.mathgraphI",
+                        sys.nframe(), 1:nI, sep = ".")
+                Iexpr <- substring(cterm, eyes[, 1] +
+                        2, eyes[, 2] - 1)
+                for(i in 1:nI) {
+                        this.val <- eval(parse(text =
+                                Iexpr[i]), data)
+                        assign(Inames[i], this.val,
+                frame = 1)
+eye.ext <- matrix(c(0, t(eyes), nchar(
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+}
+
+302
+CHAPTER 13. FORMULAS
+        cterm) + 2), nrow = 2)
+allI.strings <- character(2 * nI + 1)
+allI.strings[2 * (1:nI)] <- Inames
+allI.strings[seq(1, 2 * nI + 1, by = 2
+        )] <- substring(cterm, eye.ext[
+1, ]+1,eye.ext[2, ]-1) cterm <- paste(allI.strings, collapse
+                 = "")
+allterms <- unpaste(cterm, sep = "+")
+}
+You may notice that the first line (that uses deparse) has been changed. This has nothing to do with I, but rather fixes a bug when the formula is long. deparse returns a string for each line that it thinks there should be. So the paste command ensures that we have just a single string.
+After that, this starts with a call to find.I.of of page 280, which returns a matrix of the start and end of each call to I (if any). When there are instances of I to handle, then each of them is evaluated in the appropriate frame using the eval-parse-text idiom, and put into variables in frame 1. The call to sys.nframe makes sure that there will not be collisions in the names if there are nested occurrences of this code. The cterm string is broken into pieces, and the names for the evaluated I expressions are substituted in. This last operation could be abstracted into a separate function, but I’m not sure that it would be especially useful.
+Now we can try our example again.
+> mathgraph(~ jj1 * I(jj1+1))
+[1]  node 1 <-> node 2
+[2]  node 2 <-> node 2
+[3]  node 3 <-> node 2
+[4]  node 1 <-> node 3
+[5]  node 2 <-> node 3
+[6]  node 3 <-> node 3
+[7]  node 1 <-> node 4
+[8]  node 2 <-> node 4
+[9]  node 3 <-> node 4
+class: mathgraph
+> mathgraph(~ I(jj1*2) / I (jj1+3) + jj1 / I(jj1+1))
+[1]  node 2 <-> node 4
+[2]  node 4 <-> node 5
+[3]  node 6 <-> node 6
+[4]  node 1 <-> node 2
+[5]  node 2 <-> node 3
+[6]  node 3 <-> node 4
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+13.3. MATHEMATICAL GRAPHS 303 class: mathgraph
+It is sensible to name edges as well as nodes. The names of the mathgraph object is natural for this, given the structure. The names for the class can just be the row names of the matrix underlying the object.
+"names.mathgraph"<-
+function(x)
+{
+        dimnames(unclass(x))[[1]]
+}
+"names<-.mathgraph"<-
+function(x, value)
+{
+        cl <- class(x)
+        x <- unclass(x)
+        dimnames(x)[[1]] <- value
+        class(x) <- cl
+        x
+}
+This makes the assignment form very easy as well. At this point, the unclassing is not necessary since there are no mathgraph methods for dimnames. However, we don’t want our functions to break if code is added later.
+We want the length of the graph to be the number of edges contained in the graph.
+"length.mathgraph"<-
+function(x)
+{
+        x <- unclass(x)
+        if(length(x))
+dim(x)[1]
+else 0
+A simpler way to write this function would be to replace the if statement by
+the line:
+length(x)/2
+However, it might be slightly safer and not much less efficient to leave it as is.
+Subscripting is a very powerful feature of S, and we want subscripting to work for any class that we create if at all sensible. For graphs that means subscripting on the edges.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+}
+
+304 CHAPTER 13. FORMULAS
+"[.mathgraph"<-
+function(x, i)
+{
+}
+cl <- class(x)
+x <- unclass(x)
+xdir <- attr(x, "directed")
+if(is.character(i))
+names(xdir) <- dimnames(x)[[1]] x<-x[i, ,drop=F]
+attr(x, "directed") <- xdir[i]
+class(x) <- cl
+x
+This is easy to write since we inherit the subscripting from matrices. Not in the technical sense since matrices are not object-oriented in version 3, but it is inheritance nonetheless.
+Note the drop = F, we don’t want to lose the matrixness in case the result has only one edge.
+The assignment form of subscripting follows the same pattern.
+"[<-.mathgraph"<-
+function(x, i, value)
+{
+        if(!inherits(value, "mathgraph"))
+                stop("need mathgraph on right-hand side")
+        cl <- class(x)
+        x <- unclass(x)
+        value <- unclass(value)
+        ilen <- length(i)
+        if(is.logical(i))
+                ilen <- sum(rep(i, length = nrow(x)))
+        if(nrow(value) != ilen)
+                stop("replacement value not correct length")
+        xdir <- attr(x, "directed")
+        if(is.character(i))
+                names(xdir) <- dimnames(x)[[1]]
+        x[i,  ] <- value
+        xdir[i] <- attr(value, "directed")
+        attr(x, "directed") <- xdir
+        class(x) <- cl
+        x
+}
+The lines involving ilen are to avoid the problem described on page 122.
+Let’s see how they work.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+13.3. MATHEMATICAL GRAPHS 305
+> jjmg2
+d   node 4 <-> node 1
+e   node 5 <-> node 1
+f   node 6 <-> node 1
+g   node 2 <-> node 4
+h   node 3 <-> node 4
+i   node 2 <-> node 6
+j   node 3 <-> node 6
+class: mathgraph
+> jjmg2[2:3]
+e   node 5 <-> node 1
+f   node 6 <-> node 1
+class: mathgraph
+> jjmg2[c("f","j","f")]
+f   node 6 <-> node 1
+j   node 3 <-> node 6
+f   node 6 <-> node 1
+class: mathgraph
+> jjmg2[c(F,T)]
+e   node 5 <-> node 1
+g   node 2 <-> node 4
+i   node 2 <-> node 6
+class: mathgraph
+So subscripting is very similar to subscripting a typical vector. Replacement is also similar to the case with vectors.
+> jjmg2[2:4] <- jjmg1
+> jjmg2
+d   node 4 <-> node 1
+e   node 1 <-> node 2
+f   node 2 <-> node 3
+g   node 3 <-> node 4
+h   node 3 <-> node 4
+i   node 2 <-> node 6
+j   node 3 <-> node 6
+class: mathgraph
+Sometimes we want to deal only with directed graphs. We can create a generic function to turn non-directed graphs into directed ones. So the result looks like:
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+306 CHAPTER 13.
+> jjmg1
+a   node 1 <-> node 2
+b   node 2 <-> node 3
+c   node 3 <-> node 4
+class: mathgraph
+> alldirected(jjmg1) a node1 ->node2 b node2 ->node3 c node3 ->node4 a node2 ->node1 b node3 ->node2 c node4 ->node3
+class: mathgraph
+The default method merely creates an error.
+"alldirected.default"<-
+function(x, ...)
+{
+        stop("do not know how to handle")
+}
+In a sense this is redundant since an error will occur if the default method is needed, but doesn’t exist. However, when it is written, it means that the programmer has thought over the situation.
+Here is the method for mathgraph.
+"alldirected.mathgraph"<-
+function(x)
+{
+}
+dir <- attr(x, "directed")
+if(all(dir))
+        return(x)
+x <- unclass(x)
+ans <- rbind(x, x[!dir, 2:1])
+attr(ans, "directed") <- rep(T, nrow(ans))
+class(ans) <- "mathgraph"
+ans
+This takes all of the input edges and adds another edge in reverse order for each undirected edge.
+Note that the class of the output is not guaranteed to be the same as that of the input. This function could be used by a special type of mathematical graph
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+FORMULAS
+
+13.3. MATHEMATICAL GRAPHS 307
+that inherits from mathgraph. By not passing the class of the input to the output, we are making sure that we don’t end up with an object that doesn’t make sense—it could be that that special class of graph doesn’t make sense for directed graphs. It is subtle distinctions like this that are the hardest part of object-oriented programming. Whether you have a monument or a pile of rubble can depend on getting these decisions right.
+We can combine mathgraph objects by calling mathgraph again.
+> jjmg3 <- jjmg1
+> jjmg4 <- jjmg2
+> class(jjmg3) <- c("subA", "mathgraph")
+> class(jjmg4) <- c("subA", "mathgraph")
+> mathgraph(~ jjmg3 + jjmg4)
+a   node 1 <-> node 2
+b   node 2 <-> node 3
+c   node 3 <-> node 4
+d   node 4 <-> node 1
+e   node 1 <-> node 2
+f   node 2 <-> node 3
+g   node 3 <-> node 4
+h   node 3 <-> node 4
+i   node 2 <-> node 6
+j   node 3 <-> node 6
+class: mathgraph
+But it is more convenient to have a method for the c function. This also allows
+us to retain subclasses of mathgraph if appropriate.
+> c(jjmg4, jjmg3)
+d   node 4 <-> node 1
+e   node 1 <-> node 2
+f   node 2 <-> node 3
+g   node 3 <-> node 4
+h   node 3 <-> node 4
+i   node 2 <-> node 6
+j   node 3 <-> node 6
+a   node 1 <-> node 2
+b   node 2 <-> node 3
+c   node 3 <-> node 4
+class: subA mathgraph
+> c(jjmg1, jjmg3)
+a   node 1 <-> node 2
+b   node 2 <-> node 3
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+308 CHAPTER 13.
+c   node 3 <-> node 4
+a   node 1 <-> node 2
+b   node 2 <-> node 3
+c   node 3 <-> node 4
+class: mathgraph
+> jjmg5 <- jjmg1
+> class(jjmg5) <- c("subB", "mathgraph")
+> c(jjmg5, jjmg3)
+a   node 1 <-> node 2
+b   node 2 <-> node 3
+c   node 3 <-> node 4
+a   node 1 <-> node 2
+b   node 2 <-> node 3
+c   node 3 <-> node 4
+class: mathgraph
+FORMULAS
+So the class of the result of a call to c.mathgraph will be the most specific set of classes that all of the inputs have in common. For many types of object this is the proper behavior. But it isn’t necessarily in this case—if the subclass of mathgraph represents trees, the combination of two or more trees doesn’t guarantee that the result is a tree.
+The definition of the c method is:
+"c.mathgraph"<-
+function(...)
+{
+}
+dots <- list(...)
+the.class <- commontail(lapply(dots, class))
+if(!match("mathgraph", the.class, nomatch = 0)
+)
+        stop("not all mathgraph objects")
+amat <- do.call("rbind", dots)
+adir <- unlist(lapply(dots, function(x)
+attr(x, "directed")))
+if(dim(amat)[1] != length(adir))
+        stop("garbled object")
+attr(amat, "directed") <- adir
+class(amat) <- the.class
+amat
+There is a check at the end to make sure that the directed attribute matches the rest of the object. Without the check, there is the possibility of trouble that will be hard to track down.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+13.3. MATHEMATICAL GRAPHS 309
+We wouldn’t mind having an optional argument to determine how to treat the class, but version 3 (at least) of S won’t allow it (the default method of c gets used when the optional argument is in the call).
+The mechanism that decides what the class resulting from c.mathgraph should be is the commontail function. Its definition is:
+> commontail
+function(x)
+{
+        the.lens <- unlist(lapply(x, length))
+        min.len <- min(the.lens)
+        if(min.len == 0)
+                return(NULL)
+        ans <- NULL
+        x <- lapply(x, rev)
+        for(i in 1:min.len) {
+                this.ans <- unique(unlist(lapply(x,
+                        function(y, i)
+                y[i], i = i)))
+                if(length(this.ans) == 1) {
+} }
+ans }
+}
+else {
+ans <- c(this.ans, ans)
+break
+You’ll notice that lapply plays prominently in this function. Once we know that there is really some work to do, the order is reversed in each component to make it easier. Inside the for loop there is a decision based on there being a unique element in all of the components.
+If we don’t want to allow edges of the same type between the same nodes, then we can use unique.mathgraph.
+"unique.mathgraph"<-
+function(x)
+{
+        dir <- attr(x, "directed")
+        cl <- class(x)
+        x <- unclass(x)
+        xdup <- duplicated(paste(x[, 1], x[, 2], dir))
+        x <- x[!xdup, , drop = F]
+        dir <- dir[!xdup]
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+310
+CHAPTER 13. FORMULAS
+}
+attr(x, "directed") <- dir
+class(x) <- cl
+x
+}
+This uses the usual trick of unique which is to delete duplicated items.
+The sort.mathgraph function makes it easier to look at printed graphs. Note that sort is not generic in (at least) lots of versions, so you will probably need to type the full name.
+"sort.mathgraph"<-
+function(x, nodes = T, edges = T)
+{
+dir <- attr(x, "directed")
+cl <- class(x)
+x <- unclass(x)
+if(nodes && !all(dir)) {
+        x[!dir,  ] <- stable.apply(x[!dir,  ,
+                drop = F], 1, sort)
+}
+if(edges) {
+        ord <- order(x[, 1], x[, 2])
+        x <- x[ord,  ]
+        attr(x, "directed") <- dir[ord]
+}
+class(x) <- cl
+x
+Note that unclass is necessary because we are subscripting in the sense of the matrix underlying the mathgraph object, not in the sense of subscripting the edges.
+This sort routine allows both sorting of the nodes within an undirected edge, and sorting of the edges.
+One useful representation of mathematical graphs is an adjacency matrix. This is a square matrix in which the dimension is the number of nodes. There is a “1” in location i,j if there is an edge from node i to node j. So if all of the edges are undirected, then the matrix is symmetric.
+Here’s a function to transform a mathgraph object into the equivalent adja- cency matrix.
+"adjamat.mathgraph"<-
+function(x, general = F)
+{
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+13.3. MATHEMATICAL GRAPHS 311
+}
+x <- unclass(x)
+xdir <- attr(x, "directed")
+ischar <- is.character(x)
+if(ischar) {
+}
+else {
+nnam <- unique(x)
+nnode <- length(nnam)
+has.names <- T
+if(!is.numeric(x))
+        stop("nodes must be character or numeric")
+nnode <- max(x)
+nnam <- paste("node", 1:nnode)
+has.names <- F
+}
+ans <- array(0, c(nnode, nnode), list(nnam,
+        nnam))
+if(ischar) {
+        dx <- dim(x)
+        x <- match(x, nnam)
+        dim(x) <- dx
+}
+ans[x] <- 1
+if(any(!xdir))
+        ans[x[!xdir, 2:1]] <- 1
+if(general) {
+        stop("general version not implemented")
+}
+attr(ans, "call") <- match.call()
+attr(ans, "has.names") <- has.names
+class(ans) <- "adjamat"
+ans
+Making the function above a method for a generic function is sensible.
+"adjamat"<-
+function(x, ...)
+UseMethod("adjamat")
+An example where the nodes are character is:
+> adjamat(mathgraph(~ state.name[1:3]/state.name[2:4]))
+         Alabama Alaska Arizona Arkansas
+ Alabama       0      1       0        0
+  Alaska       1      0       1        0
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+312 CHAPTER 13. FORMULAS
+ Arizona       0      1       0        1
+Arkansas       0      0       1        0
+attr(, "call"):
+adjamat.mathgraph(x = mathgraph( ~ state.name[1:3]/
+        state.name[2:4]))
+attr(, "has.names"):
+[1] T
+attr(, "class"):
+[1] "adjamat"
+Another representation of a graph is an incidence matrix. This matrix has as many rows as nodes in the graph, and the number of columns is equal to the number of directed edges plus twice the number of undirected edges.
+Incidence matrices have an advantage over adjacency matrices in that the latter destroy information about the edges—we can’t retain the names of the edges in an adjacency matrix without essentially keeping the original mathgraph object. However, there are typically more edges than nodes in a graph, so inci- dence matrices are usually going to be bigger than adjacency matrices. Neither are very frugal with space.
+Here is the function to transform a mathgraph object into an incidence matrix. This is simplified by taking out the code that makes sure that loops (an edge that begins and ends on the same node) behave properly. As is common, an unimportant case like this involves a major part of the function.
+"incidmat.mathgraph"<-
+function(x, expand = T, general = F)
+{
+        x <- unclass(x)
+        xdir <- attr(x, "directed")
+        nedge <- dim(x)[1]
+        eseq <- 1:nedge
+        cnam <- dimnames(x)[[1]]
+        has.names <- c(nodes = is.character(x), edges
+                 = T)
+        if(!length(cnam)) {
+                has.names["edges"] <- F
+                cnam <- paste(ifelse(xdir, "arc",
+                        "edge"), eseq)
+        }
+        ischar <- is.character(x)
+        if(ischar) {
+                nnam <- unique(x)
+                nnode <- length(nnam)
+                dx <- dim(x)
+                x <- match(x, nnam)
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+13.3. MATHEMATICAL GRAPHS 313 dim(x) <- dx
+}
+}
+else {
+}
+else {
+cnam <- rep(cnam, 2 - xdir)
+ans <- array(0, c(nnode, length(cnam)),
+        list(nnam, cnam))
+reseq <- match(eseq, rep(eseq, 2 -
+        xdir))
+ans[cbind(x[, 2], reseq)] <- -1
+ans[cbind(x[, 1], reseq)] <- 1
+ans[cbind(x[!xdir, 1], reseq[!xdir] +
+        1)] <- -1
+ans[cbind(x[!xdir, 2], reseq[!xdir] +
+1)] <- 1
+ans <- array(0, c(nnode, nedge), list(
+        nnam, cnam))
+ans[cbind(x[, 1], eseq)] <- 1
+ans[cbind(x[, 2], eseq)] <- ifelse(
+xdir, -1, 1)
+if(!is.numeric(x))
+        stop("nodes must be character or numeric")
+nnode <- max(x)
+nnam <- paste("node", 1:nnode)
+}
+loops <- x[, 1] == x[, 2]
+if(expand && !all(xdir)) {
+}
+attr(ans, "has.names") <- has.names
+attr(ans, "call") <- match.call()
+class(ans) <- "incidmat"
+ans
+After some initial bureaucracy, the work really gets underway in the if(expand). Expanding means that undirected edges are broken into two directed edges—so cnam is replicated accordingly. The reseq object is the indices corresponding to the first column representing each edge. This is then used to put values in the appropriate places, using a matrix as the object inside the subscripts. The else clause is similar.
+As stated earlier, this listing leaves out how loops are handled—not because it is hard, but because it is a lot of code for not much gain. My first attempt at this function tried to be clever, and handle loops along with everything else in only a couple more lines than you see here. The problem with that was that it didn’t work for all cases.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+314 CHAPTER 13. FORMULAS So there are two traps to fall into:
+• You can subscribe always to cleverness, in which case your code may have surprising bugs. Attempts to fix these bugs may lead to further knots of code that can easily create new bugs.
+• You can avoid cleverness, thus making code that is long, tedious, and perhaps inefficient. As more functionality is needed, the code gets ever longer, because simple solutions are hidden in the volumes of code.
+Don’t do either.
+The incidmat function is generic, we call it to use the incidmat.mathgraph function.
+> incidmat(mathgraph(~ 1:3/2:4))
+       edge 1 edge 1 edge 2 edge 2 edge 3 edge 3
+0 0 0 0
+                          1     -1      0      0
+                         -1      1      1     -1
+                          0      0     -1      1
+node1
+node2
+node3
+node4
+attr(, "has.names"):
+nodes edges FF
+1 -1 -1 1 0 0 0 0
+attr(, "call"):
+incidmat.mathgraph(x = mathgraph( ~ 1:3/2:4))
+attr(, "class"):
+[1] "incidmat"
+> incidmat(mathgraph(~ 1:3/2:4), ex=F)
+edge 1 edge 2 edge 3
+     1      0      0
+     1      1      0
+     0      1      1
+     0      0      1
+node1
+node2
+node3
+node4
+attr(, "has.names"):
+nodes edges FF
+attr(, "call"):
+incidmat.mathgraph(x = mathgraph( ~ 1:3/2:4), expand = F)
+attr(, "class"):
+[1] "incidmat"
+Mathematical graphs are built not for their own sake, but to learn things about them. For example, we may be interested in a path from one node to some other node. The getpath.adjamat function does this when the graph is represented by an adjacency matrix. This is very similar to getpath.incidmat which is shown here.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+13.3. MATHEMATICAL GRAPHS 315
+"getpath.incidmat"<-
+function(x, start, end)
+{
+        if(start == end)
+                return(mathgraph())
+        x <- unclass(x)
+        dircheck <- rep(1, dim(x)[1]) %*% x
+        if(any(dircheck))
+                stop("need matrix for directed graph")
+        has.names <- attr(x, "has.names")
+        if(has.names["edges"])
+                enames <- dimnames(x)[[2]]
+        else enames <- NULL
+        if(has.names["nodes"])
+                node.names <- dimnames(x)[[1]]
+        else node.names <- NULL
+        if(is.character(c(end, start))) {
+                start <- match(start, node.names, nomatch = NA)
+                end <- match(end, node.names, nomatch = NA)
+                bad.in <- c("start", "end")[is.na(c(start, end))]
+                if(length(bad.in))
+                        stop(paste(paste(bad.in, collapse = " and "),
+                                "not right"))
+        }
+        tset <- start
+        prev <- 0
+        edges <- 0
+        unchecked <- T
+        nseq <- 1:dim(x)[1]
+        eseq <- 1:dim(x)[2]
+        repeat {
+# have a path
+this.index <- (1:length(unchecked))[unchecked][1]
+newe <- eseq[x[tset[this.index],  ] > 0.5]
+if(length(newe)) {
+        newn <- row(x[, newe, drop = F])[as.vector(x[, newe] <
+                -0.5
+                )]
+        newt <- !duplicated(newn)
+        newn <- newn[newt]
+        newe <- newe[newt]
+        newt <- match(newn, tset, nomatch = 0) == 0
+        newn <- newn[newt]
+        newe <- newe[newt]
+}
+else newn <- NULL
+unchecked[this.index] <- F
+if(n <- length(newn)) {
+        if(endind <- match(end, newn, nomatch = 0)) {
+                tset <- c(tset[!unchecked], end)
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+316
+CHAPTER 13. FORMULAS
+                prev <- c(prev[!unchecked], tset[this.index])
+                edges <- c(edges[!unchecked], newe[endind])
+                pseq <- 1:length(tset)
+                path <- this.index <- length(tset)
+                this.node <- end
+                while(prev[this.index] != start) {
+                  this.index <- pseq[tset == prev[this.index]]
+                  path <- c(this.index, path)
+                }
+                if(has.names["nodes"]) {
+                  ans <- mathgraph( ~ node.names[prev[path]]/
+                    node.names[tset[path]], dir = T)
+                }
+                else {
+                  ans <- mathgraph( ~ prev[path]/tset[path],
+dir = T) }
+                if(has.names["edges"]) {
+                  names(ans) <- enames[edges[path]]
+                }
+                return(ans)
+        }
+        tset <- c(tset, newn)
+        edges <- c(edges, newe)
+        prev <- c(prev, rep(tset[this.index], n))
+        unchecked <- c(unchecked, rep(T, n))
+}
+if(!any(unchecked))
+        return(NULL)
+} }
+By seeing a repeat loop in which there is a great deal of creating and enlarging objects, you might have the idea that S is not the ideal place for this code. You’d be right. A C implementation is going to be miles more efficient than the S code, however, it will take substantially longer to code also. A good implementation would have getpath.mathgraph pass the matrix of the mathgraph object down into C to do the work and pass the answer back, at which point S would construct the appropriate object to return. The current getpath.mathgraph makes an incidence matrix of the graph and then uses the incidmat method of getpath.
+Here is getpath in action.
+> jjmgs2 <- mathgraph(~ state.name[1:3]*state.name[2:4] +
++    state.name[22:23]*state.name[24:25] +
++    state.name[2]/state.name[23], dir=T)
+> getpath(jjmgs2, "Alabama", "Missouri")
+[1]   Alabama  ->  Alaska
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+13.3. MATHEMATICAL GRAPHS 317 [2] Alaska -> Minnesota
+[3]   Minnesota  ->  Missouri
+class: mathgraph
+Of course it is natural to think of mathematical graphs visually, which means that you should be able to plot them. Here is a quick and decidedly dirty plot method for mathgraph objects.
+"plot.mathgraph"<-
+function(x, ...)
+{
+}
+}
+px <- cos((2 * 0:(maxx - 1) * pi)/maxx)
+py <- sin((2 * 0:(maxx - 1) * pi)/maxx)
+plot(px, py, axes = F, xlab = "", ylab = "",
+        xlim = c(-1.04, 1.04), ylim = c(-1.04,
+        1.04), ...)
+box()
+px <- 0.98 * px
+py <- 0.98 * py
+if(!all(xdir))
+        segments(px[x[!xdir, 1]], py[x[!xdir,
+                1]], px[x[!xdir, 2]], py[x[!
+xdir, 2]])
+if(any(xdir))
+        arrows(px[x[xdir, 1]], py[x[xdir, 1]],
+                px[x[xdir, 2]], py[x[xdir, 2]]
+                )
+text(px * 1.07, py * 1.07, node.names)
+invisible()
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+x <- unclass(x)
+xdir <- attr(x, "directed")
+if(ischar <- is.character(x)) {
+}
+else {
+node.names <- unique(x)
+maxx <- length(node.names)
+dx <- dim(x)
+x <- match(x, node.names)
+dim(x) <- dx
+maxx <- max(x)
+node.names <- as.character(1:maxx)
+
+318 CHAPTER 13. FORMULAS 13.4 Things to Do
+There is a bug in the version of unique.mathgraph listed on page 309—trust me, you shouldn’t trust me. What is the bug? How would you fix it?
+Write adjamat.incidmat and incidmat.adjamat.
+Is subscripting feasible for classes adjamat and incidmat?
+Are there operations that should be added to the formulas for mathgraph? How should adjacency and incidence matrix representations be coerced to mathgraph objects? What other additions should be made to the mathgraph implementa- tion?
+In many applications the edges of a graph have a capacity—for example, a telephone system. Create a new class that inherits from mathgraph that has capacities for the edges.
+Write a plot.mathgraph that does what we really want to happen. Can you allow the user to have control over the exact output?
+Write a suite of functions to perform various operations with mathematical graphs. That is, functions similar in spirit to getpath. How do you test these functions?
+Write a function that generates random graphs.
+Write a function that can benefit from having at least one argument be a for- mula. What differences would there be in an implementation without formulas?
+13.5 Further Reading
+A book on mathematical graphs is Chachra, Ghare and Moore (1979) Applica- tions of Graph Theory Algorithms.
+

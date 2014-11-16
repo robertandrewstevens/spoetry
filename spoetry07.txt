@@ -1,0 +1,399 @@
+S POETRY
+by Patrick J. Burns
+
+Chapter 7: Unix for S Programmers
+
+7.1 Environment Variables
+7.2 Using Unix
+7.3 Vocabulary
+7.4 Things to Do
+7.5 Further Reading
+7.6 Quotations
+
+You generally need to know very little about your operating system in order to use S. But there are a few things that can be helpful. If you are not using some variant of Unix, then you may wish to skip this chapter, though toolkits do exist so that you can get much of the functionality discussed here.
+
+7.1 Environment Variables
+
+The two fundamental entities in Unix are processes and files. Files are pretty intuitive except that they are abstracted to include more than you might expect. Simple Unix commands result in one process being created, other commands (like starting S) result in a number of processes. Each process has a parent, and may spawn children of its own.
+
+The program that gives us a Unix prompt is a process. When we start S (for example), the process started for S is the child of the process that gave us the Unix prompt. The child process inherits the environment of the parent. The child can then change its environment. The environment is the collection of environment variables and the values that they have.
+
+By convention environment variables are all in upper-case. To access the value of a variable, put a $ in front of the variable name. So you could issue a Unix command like
+
+ls $HOME
+
+to list the files in your home directory.
+
+S uses a number of environment variables. Since an escape to Unix creates a subprocess of S, you can see S’s environment with the S command:
+
+> !env
+
+(or possibly !printenv). Here is an edited version of the result with only the most pertinent variables shown. This is using version 3.3 of S-PLUS on an SGI machine.
+
+> !env
+DISPLAY=pburns.seanet.com:0
+HOME=/byron/users/burns
+LD_LIBRARY_PATH=/usr/lang/SC1.0
+LESS=-PPaging with ’less’
+MANPATH=/usr/local/man:/usr/share/catman:/usr/man:/usr/catman
+PATH=/usr/lang/gnu/bin:/usr/lang/gnu/lib:/usr/sbin:/byron/users/bur
+ns/bin:/usr/local/bin:/bin:/usr/bin/X11:/usr/bsd:.:/usr/etc:/etc:/u
+sr/bin
+PWD=/user/users/burns/spo
+REMOTEHOST=pburns.seanet.com
+SHELL=/bin/csh
+SHOME=/byron/splus/3.3/sgi
+SLIC_RSHCMD=rsh %s env SHOME=$SHOME Splus LICENSE server start
+S_CC_FLAGS=
+S_CLHISTFILE=/byron/users/burns/.Splus_history
+S_DEFAULT=NEW
+S_DL2_EXTRAS=
+S_FRONT_END_RUNNING=1
+S_LASERJET_DPI=300
+S_LASERJET_PRINT_COMMAND=lp -Ppoe
+S_LD_FLAGS=
+S_LIB_DYNLOAD2= -lF77 -lI77 -lU77 -lisam -lelf -lmld -lm -lbsd -lsun -lc
+S_LIB_STATIC= -lF77 -lI77 -lU77 -lisam -lelf -lmld -lm -lbsd -lsun -lc
+S_PAGER=less
+S_PATH=/byron/splus/3.3/sgi/splus/.Functions:/byron/splus/3.3/sgi/s
+tat/.Functions:/byron/splus/3.3/sgi/s/.Functions:/byron/splus/3.3/s
+gi/s/.Datasets:/byron/splus/3.3/sgi/stat/.Datasets:/byron/splus/3.3
+/sgi/splus/.Datasets
+S_POSTSCRIPT_PRINT_COMMAND=lp
+S_PRINTGRAPH_METHOD=postscript
+S_PRINT_ORIENTATION=landscape
+S_SCRIPT_SCCS_MAJOR=1
+S_SCRIPT_SCCS_MINOR=73
+S_SHELL=/bin/csh
+S_WORK=.Data:/byron/users/burns/.Data
+TERM=vt100
+USER=burns
+XAPPLRESDIR=/usr/lib/X11/app-defaults
+XFILESEARCHPATH=/byron/splus/3.3/sgi/splus/lib/X11/app-defaults/%N:/
+usr/lib/X11/%T/%N
+
+Most of the S specific variables start with S . They include variables to control printing, loading object code and so on. The S WORK and S PATH variables provide what is to be on the search list as S starts up. The first thing in S WORK that exists is used as the working database, and everything in S PATH is then put on the search list.
+
+A variable that doesn’t appear here, but which can be set is S FIRST. This should contain S commands; the commands are executed when S starts, and the .First function (if it exists) is not executed.
+
+% setenv S_FIRST ’options(error=NULL); cat("error off\n")’
+% Splus
+S-PLUS : Copyright (c) 1988, 1995 MathSoft, Inc.
+S : Copyright AT&T.
+Version 3.3 Release 1 for Silicon Graphics Iris, IRIX 5.2 : 1995
+Working data will be in .Data
+error off
+>
+
+A variable that can be useful in special situations is S SILENT STARTUP. This suppresses the copyright printing.
+
+% setenv S_SILENT_STARTUP 1
+% Splus
+error off
+>
+
+setenv is the C shell command to set an environment variable. The Bourne Shell has a different mechanism. There are “shell” variables as well as envi- ronment variables. The distinction is that the children of a process inherit the environment variables but not the shell variables.
+
+7.2 Using Unix
+
+Generally the first thing you do each time you meet up with Unix is to type a password. Always maintain a secure password. Here are some rules for picking a password:
+
+• Do not use a name or a word as a password. Hackers can automatically try each item in a list as a guess for your password — a dictionary or a list of users is a likely choice. In particular, never have the password the same as the login name.
+
+• Do not use an identification number or birthday as a password — a hacker could discover these and try them.
+
+• Passwords should be easy to type (so it isn’t easy to observe the password as you type it in), but should contain some non-alphabetic characters.
+
+• They should also not be too short. There are only about half a million “words” that contain 4 lower-case letters, but on the order of 1010 that contain 6 characters from both lower- and upper-case letters, the digits and a few symbols. Half a million is not too many for some hackers to try, 1010 is.
+
+Combining two words in some way, or using an acronym are two common ways of making a good password. I (you’ll be shocked to learn) generally create an acronym out of a line of poetry. For example, the slow smokeless burning of decay 24 becomes “ts2bod”. Once you have a good password, it is important to not let it be compromised, and to change it if you suspect it could have been. Never put your password in an email message or similar place—a hacker can search for occurrences of “password”.
+
+When you are at a Unix prompt, you are really conversing with a shell. A shell is the outer clothing of Unix and may be changed. The most common shell for interactive use is the C shell, and the most common shell for programming is the Bourne shell. Alternatives include the Korn shell and the Bourne-again shell. Most things are the same in all of the shells, but there are differences in such things as history mechanisms and flow control. The reason that you can’t use an S command like
+
+> attach("~/.Data") # this won’t work
+
+is that the tilde construct is a C shell device, but attach uses the Bourne shell to look for the file.
+
+Two universal abbreviations concerning path names is the double dot (..) which means the directory directly above the current directory, and the dot (.) which means the current directory. For example to copy a bunch of files to the current directory, you could give a Unix command like:
+
+% cp ../other_dir/*.c .
+
+The C shell has a history mechanism that can be very handy. Some amazing things can be done with it, but I’ll just give the most basic commands. !! repeats the last command. !number repeats the command with that number, for example, !21 repeats command number 21. !$ gets the last “word” of the last command, and !* gets all but the first word of the last command. So you can do something like:
+
+% ls jj* 
+% rm !$
+
+to first make sure that there is nothing untoward in the expansion, and then make sure that you get the exact same thing in the second command (rule out typos).
+
+I stated earlier that Unix files are abstracted to include more than our usual sense of files. Three important “files” are standard-in, standard-out and standard-error. Standard-in is where most Unix programs expect their input to come from. Standard-out is where most programs put their output, and standard-error is where error messages usually appear. These can be changed or redirected to actual files, for example
+
+% S < commands.q
+
+makes S look in commands.q for its input, so standard-in is redirected. The
+command
+
+% S < commands.q > s.out
+
+is almost like using the S BATCH utility except that BATCH takes care of some
+details.
+
+A Unix pipe is related to redirection — the standard-out from one process is used as the standard-in of another. Here is an example:
+
+% setenv S_FIRST ’invisible()’
+% setenv S_SILENT_STARTUP 1
+% set jj=7
+% echo $jj "+" $jj "/3" | Splus
+[1] 9.333333
+%
+
+A more practical instance of this is shown on page 191 in the discussion of CHAPTER and data.dump.
+
+Commands in Unix may be put into the background, meaning that the process continues to compute but you get the prompt back so that you can perform other tasks. The command
+
+% S < c.in > c.out
+
+is in the foreground so you need to wait until S has done all of the commands in c.in before the prompt will come back. In contrast if you type:
+
+% Splus < c.in > c.out &
+[1] 21806
+% jobs
+[1]  + Running              Splus < c.in > c.out
+
+then you will get the prompt back right away. The & character puts processes into the background.
+
+Unix recognizes three types of quotes. Both double quote and single quote are used to protect characters from being interpreted — read some Unix documentation to get the difference between " and ’. The backquote is used to substitute in the result of a command. For example
+
+% Splus SHOME
+/byron/splus/3.3/sgi
+
+returns the directory that is the home of S, so the command:
+
+% ls ‘Splus SHOME‘
+Version            local/
+adm/               module/
+bin/               newfun/
+cmd/               s/
+doc/               splus/
+include/           stat/
+library/
+
+lists the contents of that directory.
+
+Unix allows you to give an alias to a command. A trivial example is that someone comfortable with DOS can alias dir to be ls. A less trivial example is:
+
+% alias pgb ’ps -aux | grep burns’
+
+This creates the command pgb that gives a list of all of the processes that belong to my login name (more correctly all the processes whose listing from ps contains “burns”). Another non-trivial alias is the following:
+
+% alias pd ’pushd \!*’
+
+This (in the C shell) is as if you typed “pushd” when you type “pd”, including whatever arguments there are, if any.
+
+When Unix looks for a command, it uses the environment variable PATH to decide where to look for the command. This is precisely analogous to the search list in S. The PATH is a sequence of directories separated by colons. If there are no characters between two colons, that spot represents the current directory.
+
+You can create your own Unix commands (called scripts) merely by putting the command(s) into a file and making that file executable. Another way of getting my pgb would be:
+
+% echo "ps -aux | grep burns" > pgb
+% chmod +x pgb
+
+It is customary to put your scripts into a directory called bin directly under your home directory.
+
+7.3 Vocabulary
+
+In each case below, I give only a hint of the full functionality. You can look at the “man page” for the command with the man command. For example
+
+% man cat
+% man man
+% man csh
+
+will give you help on the cat command, the man command and the C shell (including its commands), respectively.
+
+The cat command has several uses, but the most common is to print out the entire contents of a file. If you want to look at only the top or the bottom of the file, then use head or tail. An especially powerful feature of tail is the f flag which continuously prints lines as they are added to the end of the file until you interrupt it (control-c). My most common use of this is:
+
+% S BATCH b.in b.out
+% tail -f b.out
+
+The grep command is used to search for particular strings in lines of files. It uses regular expressions to do the matching.
+
+ps lists the processes that are current on the machine. One common set of flags to use is ps -aux with one flavor of Unix, which is basically equivalent to ps -ef in the other major flavor.
+
+One reason to list the processes is to kill off one of them. The kill command takes process id numbers and attempts to kill that process (and its children). I often want to kill an S batch job. To do this, I use my pgb command to list the processes that I own, I then look for the main process of the S job and note its id number. So a typical sequence of commands might be:
+
+% S BATCH b.in b.out
+% tail -f b.out
+
+# (output from what S is doing, control-c to get prompt)
+
+% ps -ef | grep burns
+   burns 21741 21740  0 19:15:40 pts/1 0:00 -csh
+   burns 21806 21741 80 19:37:13 pts/1 2:39 /byron/splus/3.
+   burns 21812 21741  7 19:40:57 pts/1 0:00 ps -ef
+   burns 21810 21806  0 19:37:13 pts/1 0:00 /byron/splus/3.
+% kill -9 21806
+% !ps
+ps -ef | grep burns
+   burns 21741 21740  0 19:15:40 pts/1 0:00 -csh
+   burns 21817 21741  0 19:42:18 pts/1 0:00 grep burns
+   burns 21816 21741  4 19:42:18 pts/1 0:00 ps -ef
+
+The 9 flag on kill is needed because S batch jobs don’t die easily, so extra force is necessary.
+
+Each file in Unix has a set of permissions attached to it. There can be permission to read, to write, and to execute. Such permissions can be given to the owner of the file, the owner’s group, and to all users. The chmod command is used to change permissions. chmod understands the letters r, w and x with either a plus or minus in front. For example, if you want to block the S auditing process, you can make the .Audit file in the working database unwriteable with a command like:
+
+% chmod -w .Data/.Audit
+
+To make it writeable again, you would do:
+
+% chmod +w .Data/.Audit
+
+To see what the permissions are on a file, you can use the l flag of ls:
+
+% ls -l .Data/.Audit
+
+chmod also will take a three digit octal representing the permissions. The digit positions refer to the user, the group and everyone; the numbers are the sum of the permissions where 4 is read, 2 is write and 1 is execute.
+
+The permissions of files as they are created is controlled by umask.
+
+The diff command is used to see what is different between two files. The
+diffsccs function (page 51) is an example of its use.
+
+Links are a way of saving disk-space (and a means of abstraction). A link essentially just gives more than one name to a file. On several platforms S- PLUS links help files that are for more than one function, rather than having a separate help file for each. The ln command creates links.
+
+The at command allows you to start processes at an arbitrary time. You might for instance want to start an S batch job two hours after you leave when you presume that everyone will be off the system. The crontab command is used to start jobs on a regular schedule, for example every weekday at five o’clock.
+
+The make command is extraordinary software. Here’s the idea: you have blocks which depend on other blocks, which may depend on yet more blocks, etc.
+
+If one or more of the blocks change, you want everything updated that needs to be (but unnecessary work should be avoided). make provides such functionality. The magic to be performed is stated in a file named Makefile.
+
+DANGER. It is important to know that tabs are an important character in Makefiles. If you are using vi, you can see the actual characters in a file with the command :se list, and :se nolist turns it off.
+
+One example of when make is useful is if you have some C or Fortran code that depends on a bunch of libraries and you want to dyn.load it into S. make can be used to give the commands that creates the object file that can be loaded into S. Thus making it trivial to recreate the object file after you have edited your code. This is a traditional use of make, but its general principle is expansive enough that it can be used for a variety of purposes. the owls were bearing the farm away [25]
+
+The find command does more than you can imagine, but a simple use of it is to find files that you don’t know the location of. The command
+
+% find . -name sccs.q -print
+
+looks for files named “sccs.q” in the current directory and all its subdirectories and then prints the location of any that it finds. A common mistake is to forget to give the directory from which to start. If you want to look for files that match a certain pattern, then you can give find a wildcard pattern (as opposed to a regular expression) but you must put quotes around it:
+
+find . -name ’sccs*’ -print
+
+Functionality for finding out about different versions of a Unix command in the current environment is performed with which and whereis.
+
+% which ps
+/bin/ps
+% whereis ps
+ps: /bin/ps /usr/bin/ps /sbin/ps
+/usr/share/catman/u_man/cat1/ps.z
+
+The which command states which version of the command will be used, while whereis gives the locations where the command (or its documentation) is found on the current path.
+
+The stty command is used to control terminal commands. To see the more important (in someone’s eyes) settings, just type the command:
+
+% stty
+speed 9600 baud; -parity hupcl clocal
+line = 1; intr = ^C; old-swtch = ^@; dsusp = ^@;
+brkint -inpck icrnl onlcr tab3
+echo echoe echok echoke
+
+Add a -a flag to see all of the settings. A common setting to change is the key that is used to erase characters. The command is
+
+% stty erase
+
+where after the “erase” there is a space, and then you hit the key that you want to use.
+
+Some versions of stty allow you to change the number of rows and columns for the display so that programs like editors will work properly.
+
+The test command is quite useful in Unix programming. The following S function uses test to give information on file names.
+
+filetest <- function(filename, directory = F, read = F, write = F, 
+                     execute = F, size = F) {
+    fbe <- unix(paste("test -f", filename, "-o -d", filename), out = F) == 0
+    extras <- c(directory, read, write, execute, size)
+    ans <- c(exists = fbe, directory = NA, read = NA, write = NA, 
+             execute = NA, size = NA)
+    if(!fbe || !any(extras))
+        return(ans)
+    cmds <- paste(c("test -d", "test -r", "test -w", "test -x", "test -s"),
+                  filename)
+    for(i in seq(along = extras)) {
+        if(!extras[i]) next
+        ans[i + 1] <- unix(cmds[i], out = F) == 0
+    }
+    ans
+}
+
+Here are some examples of its use:
+
+> filetest("polygamma.q")
+ exists directory read write execute size
+      T        NA   NA    NA      NA   NA
+> filetest("SCCS", dir=T, write=T)
+ exists directory read write execute size 
+      T         T   NA     T      NA   NA
+> filetest("not_there", size=T, dir=T)
+ exists directory read write execute size
+      F        NA   NA    NA      NA   NA
+
+It is used in portoptgen on page 348.
+
+Although the use of window systems reduces the need, the pushd and popd commands in the C shell are still handy. These two commands implement the notion of a directory stack. pushd adds to the stack (among other things), and popd removes the top directory from the stack. Suppose we start in our home directory and give the command:
+
+% pushd proj1
+~/proj1 ~
+
+We are now in the proj1 directory and home is the second directory in the stack. We can add to the stack by giving a new directory to pushd:
+
+% pushd ~/proj2
+~/proj2 ~/proj1 ~
+% pushd
+~/proj1 ~/proj2 ~
+
+pushd with no arguments switches the top two directories in the stack. If we do:
+
+% pushd +2
+~ ~/proj1 ~/proj2
+
+then the third directory is brought to the top (and the stack is treated circularly). The “2” can be generalized to higher numbers, by the way.
+
+% pushd
+~/proj1 ~ ~/proj2
+% popd
+~ ~/proj2
+% dirs
+~ ~/proj2
+
+popd removes the top directory, and dirs displays the directory stack. 
+
+The shar command is a way of bundling a number of files into one file. Much of the S software on statlib is in shar files. A shar file contains the files to be created and Unix (Bourne shell) instructions on what to name the files and where the boundaries of the files are. The top of a shar file generally states how to unpack it. You should be in the directory where you want the files to live, and give a command like:
+
+% /bin/sh sharfile
+
+to unpack the file sharfile.
+
+awk and sed are used to manipulate text, such as making substitutions. These are both good programs, but if you don’t know them, I suggest that you learn Perl instead. Perl is a language that encompasses awk, sed and Unix scripts. If you know both Perl and S, you can rule the world.
+
+Your last wish should always be for more wishes. The apropos command is used to try to find documentation on commands that relate to a certain subject. You might type:
+
+% apropos tree
+ftw, nftw (3C)          - walk a file tree
+tlink (1)               - clone a file tree using symbolic links
+tsearch, tfind, tdelete, twalk (3C) - manage binary search trees
+
+and you will get back a brief description of a number of commands, most of which are likely to have nothing to do with your intention; or you might get nothing back.
+
+7.4 Things to Do
+
+Change your password if it is poor or known to others.
+
+Check the permissions on your files and see if they are how you want them.
+
+Read the man page of interesting commands.
+
+7.5 Further Reading
+
+Unix Power Tools by Peek, O’Reilly and Loukides is a very good book for learning Unix. It presumes a little competence with Unix but goes a long way toward teaching the whole of it. Unless you are a Unix expert, the answer to any Unix question that you have is likely to be in this book. I’ll admit that it isn’t always easy to go directly to that answer, but the journey that you take is often as useful as getting the answer to your original question.
+
+7.6 Quotations
+
+[24] Robert Frost “The Wood-Pile”
+[25] Dylan Thomas “Fern Hill”

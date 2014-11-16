@@ -1,0 +1,585 @@
+S POETRY
+by Patrick J. Burns
+
+Chapter 6: Debugging
+
+6.1 Masking
+6.2 Dumping
+6.3 Exploring
+6.4 Examples
+6.5 Strategy
+6.6 Bug Reports
+6.7 Things to Do
+6.8 Further Reading
+6.9 Quotations
+
+
+In which we learn to bail the boat.
+
+When S reads a line of your input (that is, parses it), there are three possible results:
+
+• There is a syntax error.
+
+• The command is incomplete. 
+
+• The command is complete.
+
+Once a comand is complete, S will go on to evaluate the command.
+
+If you get a syntax error, there is really no alternative to puzzling over the
+line in question with the hint that S gives you. When a crop is so thin [20]
+
+When you write code in an editor, then you can save yourself a few occur- rences of errors due to missing braces by typing the braces before filling them in. So at one point you have:
+
+     if(length(x)) {
+     } else {
+     }
+     
+then you go back and fill in the empty braced expressions. You might think that this is slow because you have to back up and fill in, but you save a lot of time by not having as many syntax errors, and by not needing to count braces as you type. It can also save you from getting the logic wrong.
+
+6.1 Masking
+
+Consider the two commands:
+
+> c <- matrix(1:9, 3)
+> t(c)
+     [,1] [,2] [,3]
+[1,]    1    2    3
+[2,]    4    5    6
+[3,]    7    8    9
+Warning messages:
+  Looking for object "c" of mode "function", ignored
+        one of mode "integer" in: print.structure(x, a,
+        quote = quote, prefix = prefix)
+
+Everything seems fine at the first command, but on the second we get a mysterious warning message. It can seem particularly mysterious when such warnings start appearing a long time after the assignment is made.
+
+Here is what is going on. There is an in-built function named c that is used in the process of printing the transposed matrix, but we have created another object named c that S sees first. Since the c that we created is not a function, it continues searching until it finds a function named c, and uses that. S is just being friendly when it issues the warning. We can avoid such warnings by renaming our object. In addition to c, other likely names that are good to avoid are t, C and s. (The names T and F are prohibited.)
+
+In contrast, consider the following command:
+
+# DO NOT DO THIS
+> c <- function(...) cat(list(...)[[1]])
+Warning messages:
+  assigning "c" masks an object of the same name on
+        database 5
+
+The result of this is a different warning message.
+
+Now the c that we just created will be used instead of the in-built c function (and trouble will ensue). Unless you really mean to replace the in-built function, rename your function immediately.
+
+The S-PLUS function masked can be used to see what objects in the current directory have the same names as objects in the rest of the databases on the search list.
+
+> masked()
+[1] ".Random.seed" "c"
+
+We see our c function that is masking the real one (it would also appear if it weren’t a function). .Random.seed is also masked — this is fine, it merely means that we have used a random function with this working database. A danger of masking functions becomes clear when we try to get rid of our version of the c function.
+
+> rm(c)
+Error in remove(list): need names of objects to remove,
+        not the objects themselves
+Dumped
+> remove("c")
+> masked()
+[1] ".Random.seed"
+
+When the bizarre occurs, consider masking as a likely source of the problem.
+
+6.2 Dumping
+
+So what can go wrong? You can get a syntax error, you can get “object not found” errors, and other sorts of errors. Almost all errors except syntax errors and system terminating result in the error action. When a dumpable error happens, then S performs the action given by the error option. In version 3 there are basically three choices for this option. It can be NULL, which is seldom useful; it can be dump.calls, the default; or dump.frames.
+
+Each of dump.calls and dump.frames creates an object named last.dump in the working database. When dump.calls is used, then last.dump contains the string of function calls that was in effect at the time of the error. When dump.frames is used, then last.dump contains not only the function calls, but also all of the objects in the frame for each function call.
+
+Both traceback and debugger use last.dump (by default). traceback is essentially just a printing method to show the function calls. Although very simple, this is often enough information to pinpoint the problem. I think of traceback as the first thing to do after an error dump.
+
+If traceback is not enough to comprehend the error, then debugger can be used. This allows you to look at objects within specific frames as they were at the time of the error. The debugger function has the same sort of interface as browser. In order to use debugger except as a synonym for traceback, you need to set the error option to dump.frames like:
+
+options(error = dump.frames)
+
+or
+
+options(error = expression(dump.frames()))
+
+If this was not done prior to the time of the error, then you will need to recreate the error in order to look at objects with debugger.
+
+There are times when you get a warning that you know is an indication of trouble, but you don’t understand why it is happening. This is when you should turn a warning into an error. Do this with the command:
+ 
+options(warn = 2)
+
+You can then recreate the warning, which will now be an error, and use the same tools as with any other error.
+
+6.3 Exploring
+
+When you don’t have an error condition, but either something is wrong or you are not sure that everything is right, then you need some means of exploring the computations.
+
+A very good function for this is browser. This function allows you to look at the objects in the frame of a function as they exist at the time of the call to browser. You can use traceback when you are at a browser prompt to see who called whom. This is a boy that pats the floor to see if the world is there, is flat [21]
+
+I have considered making a version of fix that automatically puts a call to browser in the definition of a new function. I use browser a lot to test functions as I write them. Write part of the function, make sure that the result so far is as expected; write some more, check that. I find this more productive (and fun) than trying to decipher errors from a function that I don’t check as I go.
+
+(It is reputed that Charlie Chaplin didn’t care if he won a volley of tennis — the important bit was looking graceful while he played. I suspect he was a formidable tennis opponent.) It’s not important that every line you write works right off, what is important is that you not assume code works unless you have evidence.
+
+DANGER. The browser.default function has a test in it to see if S is being used interactively. If not, then an error occurs. Thus, a BATCH job can be ruined if you leave a call to browser in one of the functions it uses. The top of browser.default can be changed to something like the following:
+
+if(!interactive()) {
+    warning("for interactive use")
+    return(NULL)
+}
+
+This makes it so that browser is ignored when it is called in a non-interactive setting except that a warning is issued. This seems a punishment more fitting of the crime. they’re taking him to prison for the colour of his hair [22]
+
+When you are in browser, you can assign objects to the working database with the <<- operator so that you can use those objects for testing. It is often natural at this point to interrupt (hit control-backslash) the browsing instead of going through the whole computation. If you do, then your variables won’t be there. The problem is that the assignments are not committed. You can interrupt the browsing, but you need to synchronize the database before you do. See talk of synchronize on page 103.
+
+Another exploration technique is the old standby of putting print and cat statements in function definitions. This works in any language, so it is quite popular. An advantage over browser is that the computations are not interrupted, so you can see a lot of information with minimal effort.
+
+The trace function allows you to get information each time a traced function is called. An example of a good use for trace is that you can trace all of the methods of a generic function, so that you can be sure that the functions being called are the ones that you expect.
+
+DANGER. trace creates modified versions of the functions being traced. You want to be careful when editing functions that you do not edit a traced version because you will end up with a bunch of garbage in the definition that you will need to get rid of later.
+
+Version 3.2 of S-PLUS introduced the inspect function. This is reminiscent of debuggers (like dbx) for C and Fortran code. You give inspect a command to evaluate, like:
+
+inspect(myfun(myarg1, myarg2))
+
+You can then step through the calculations and look at objects as you go. inspect, like trace, creates modified versions of functions that are being in- spected, but unlike trace the functions that inspect creates disappear right away so there is no chance of inadvertently getting the modified version.
+
+You generally need to use the techniques of this section to discover where a “system terminating” happens. System termination occurs when S detects an inconsistency, and it kills itself rather than risking the possibility of corrupting something permanently. A system termination means that there is a bug somewhere.
+
+Almost always a system termination is the result of a problem with a call to .C or .Fortran that has been added locally. Usually (but not necessarily) the termination occurs during the call to C or Fortran. Once you believe that you know the call that is causing the problem, there are a few things to check. This is discussed on page 179.
+
+6.4 Examples
+
+The best way to learn to debug is to see it done. Here are some examples of actual debugging in S. As you might expect, they have been streamlined to avoid some of the dead ends.
+
+the dimnames bug
+
+The presentation of this example definitely starts toward the end of the process. I got a “system terminating” while using a fairly involved function; it took several iterations to pare away pieces of the function in order to narrow down the location of the problem. The obvious first step was to look for local functions that contained .C or .Fortran, but there were none.
+
+Here is a simple example where everything works.
+
+> jjmat <- matrix(1:6, 2)
+> dimnames(jjmat) <- list(1:2, c("a","b","c"))
+> jjmat
+abc 1135 2246
+> rbind(jjmat, jjmat) abc
+1135 2246 1135 2246
+
+Now we do something that should change nothing at all.
+
+> dimnames(jjmat)[[1]] <- 1:2
+> jjmat
+abc 1135 2246
+> rbind(jjmat, jjmat)
+System terminating: bad address
+
+But in fact the behavior is significantly different as you can see. The sharp-eyed will recognize what the problem is in the output of the next command.
+
+> dimnames(jjmat)
+[[1]]:
+[1] 1 2
+[[2]]:
+[1] "a" "b" "c"
+
+A broader hint is provided by this command:
+
+> mode(dimnames(jjmat)[[1]])
+[1] "numeric"
+
+The bug is that when a component of the dimnames of an array is assigned a numeric vector, the coercion to character does not take place. The bug is insidious since not all operations are affected by it.
+
+This example shows off none of the debugging tools in S. There aren’t any that are especially useful. You can try using trace or inserting cat statements to identify just where the “system terminating” occurs, but you are on your own after that.
+
+the print.matrix bug
+
+Here we have a matrix, and when we try to print it out with only a few digits, we see that the digits argument is not respected.
+
+> jjpbx <- as.matrix(data.frame(a = 1:3, b = rnorm(3)))
+> jjpbx
+  a          b
+1 1 -0.7710749
+2 2  1.3230554
+3 3 -1.0032299
+> print(jjpbx, digits = 2)
+  a          b 
+1 1 -0.7710749 
+2 2  1.3230554 
+3 3 -1.0032299
+
+There is no error, and not even a warning to force into an error. So we need some other means to ferret out where the problem lies. One idea is to trace all of the functions that contain the word “print” in their name.
+
+> trace(find.objects("print"))
+> print(jjpbx, digits = 2)
+On entry: ab
+1 1 -0.7710749
+2 2  1.3230554
+3 3 -1.0032299
+Warning messages:
+print.matrix(jjpbx, digits = 2)
+  Looking for object "print" of mode "function",
+      ignored one of mode "{"
+      
+(The warning message is indicating that there is a bug in trace that will give us another opportunity to practice debugging.) What we’ve learned is that the print.matrix function is used, and it is the only function used that is currently being traced.
+
+Below we see that the object has class "matrix", and that the bug disappears when we unclass the matrix. This is the key step in the debugging, but was arrived at by lucky accident more than by the inevitable discovery of our debugging strategy.
+
+> class(jjpbx)
+[1] "matrix"
+Warning messages:
+  Looking for object "print" of mode "function",
+      ignored one of mode "{"
+> print(unclass(jjpbx), digits=2)
+  a     b
+1 1 -0.77
+2 2  1.32
+3 3 -1.00
+Warning messages:
+  Looking for object "print" of mode "function",
+      ignored one of mode "{"
+> untrace()
+
+This is substantial progress—the bug has been isolated to the print.matrix function. The task is now to understand what is happening inside print.matrix. Below is the fragment of print.matrix that seems to be pertinent.
+
+if(length(clab)) {
+    nd <- switch(mode(x),
+                 numeric = if(missing(digits)) .Options$digits
+                           else digits,
+                 character = max(nchar(x)) + 2,
+                 complex = 2 * (if(missing(digits)) .Options$digits 
+                                else digits),
+                 2)
+                 if(abbreviate.labels && max(nchar(clab)) > nd + 3)
+                        clab <- abbreviate(clab, c(nd, nd + 3))
+}
+prmatrix(x, rowlab = dn[[1]], collab = clab, quote = quote, right = right)
+
+We place a call to browser just before the call to prmatrix, and then try
+printing to see what happens.
+
+> print(jjpbx, digits=2)
+Called from: print.matrix(jjpbx, digits = 2 . . .
+b(2)> digits
+[1] 2
+b(2)> traceback()
+5: eval(i, eval.frame, parent) from 4
+4: browser.default(nframe, message = paste("Called from:", from 3
+3: browser() from 2
+2: print.matrix(jjpbx, digits = 2) from 1
+1:  from 1
+b(2)> 0
+ab 1 1 -0.7710749 2 2 1.3230554 3 3 -1.0032299
+
+The digits object is as we expect, but still the function doesn’t work. Now we try the same thing using print.default.
+
+> print.default(jjpbx, digits = 2)
+Called from: print.matrix(x, quote = quote)
+b(4)> digits
+NULL
+b(4)> traceback()
+7: eval(i, eval.frame, parent) from 6
+6: browser.default(nframe, message = paste("Called from:", from 5
+5: browser() from 4
+4: print.matrix(x, quote = quote) from 3
+3: print.structure(x, a, quote = quote, prefix = prefix) from 2
+2: print.default(jjpbx, digits = 2) from 1
+1:  from 1
+b(4)> 0
+ab
+1 1 -0.77
+2 2 1.32
+3 3 -1.00
+attr(, "class"): [1] "matrix"
+
+This time digits is NULL, which seems wrong, but the function works.
+
+A little thought and investigation shows that the problem is that digits needs to be fed to options, which is not happening when the computations go directly to print.matrix. We solve the bug by adding the following if statement to the top of print.matrix.
+
+if(!is.null(digits)) {
+    if((length(digits) != 1 || digits < 1) || digits > 20)
+        warning("Bad value for digits")
+    else {
+        on.exit(options(d))
+        d <- options(digits = digits)
+    } 
+}
+
+Now we get what we want, and we check that the digits option really is put back to the default value.
+
+> print(jjpbx, digits = 2)
+  a     b
+1 1 -0.77
+2 2  1.32
+3 3 -1.00
+> options("digits") $digits:
+[1] 7
+
+the trace bug
+
+Here we investigate the problem of tracing print that we spotted in the last example. My first hypothesis was that there’s a problem tracing functions whose body is not wrapped in braces. Tracing a function like that worked fine so let’s try tracing the print function, but by a different name.
+
+> fjj <- print
+> trace("fjj")
+> fjj(fjj) <- function(x, ...) {
+    if(.Traceon) {
+        .Internal(assign(".Traceon", F, where = 0), "S_put")
+        cat("On entry: ")
+        std.trace()
+        .Internal(assign(".Traceon", T, where = 0), "S_put")
+    }
+    UseMethod("print")
+}
+
+This works fine, but tracing the print function does not. 
+
+> trace("print")
+> print
+{
+    if(.Traceon) {
+        .Internal(assign(".Traceon", F, where = 0), "S_put")
+        cat("On entry: ")
+        std.trace()
+        .Internal(assign(".Traceon", T, where = 0), "S_put")
+    }
+}
+Warning messages:
+  Looking for object "print" of mode "function",
+       ignored one of mode "{"
+> untrace()
+
+Now it is obviously the case that the name “print” is the culprit. The trace function has an argument named print, which appears to be the only possible source of confusion.
+
+A solution is to add a dot to the end of the print argument in trace so that it becomes the print. argument. This has no effect on the use of the function.
+
+> trace("print")
+> print
+On entry:         print(print)
+function(x, ...)
+{
+    if(.Traceon) {
+        .Internal(assign(".Traceon", F, where = 0), "S_put")
+        cat("On entry: ")
+        std.trace()
+        .Internal(assign(".Traceon", T, where = 0), "S_put")
+        UseMethod("print")
+}
+> untrace()
+
+It is now possible to trace print without the extraneous warning.
+
+So we are in the highly unlikely situation of confidently producing a fix for the problem while having only a superficial understanding of how the problem arises. But our curiosity gets the better of us and we continue the investigation in order to understand how the print argument confuses the production of a print function.
+
+We use inspect to examine the computation (using the original definition
+of trace).
+
+> inspect(trace("print"))
+entering function trace
+stopped in trace (frame 3), at:
+        exprs <- expression({
+                NULL
+NULL ...
+d> step
+
+Here I omit a number of step commands in order to get to the interesting part.
+
+d> eval name
+[1] "print"
+d> eval print
+[1] T
+d> eval what
+[1] "print"
+d> step
+stopped in trace (frame 3), at:
+        fun <- get(name, mode = "function")
+d> step
+stopped in trace (frame 3), at:
+        get(name, mode = "function")
+d> step
+stopped in trace (frame 3), at:
+        n <- length(fun)
+d> eval fun
+[1] T
+
+Here is the trouble. The fun object is getting the print argument rather than the print function even though we are trying to restrict the get to functions. We continue to explore.
+
+d> eval mode((print)
+Syntax error: end.of.file ("\n") used illegally at this point:
+mode((print)
+
+Calls at time of error:
+
+7: error = function() from 6
+6: parse(text = s) from 5
+5: eval.it(str.args[1], local = loc.frame) from 4
+4: debug.tracer(what = TR.GENERIC, index = c(6, 14, 3, 4)) from 3
+3: trace("print") from 1
+2: inspect(trace("print")) from 1
+1:  from 1
+
+Dumping frames ... Dumped
+
+local frame (frame of error) is parse (frame 6)
+d> quit
+d> eval mode(print)
+[1] "logical"
+d> eval get("print", mode = "function")
+[1] T
+
+The first attempt to look at the mode of print resulted in an error due to a typo, so inspect essentially calls itself on the error. We don’t care about this error, so we tell inspect to quit in order to get back to the function that we do care about. Finally, we confirm that get is doing the wrong thing.
+
+We have now solved the mystery of how trace is going wrong — there is nothing wrong with trace, the problem is that there is a bug in get. Now we have to regard our fix for trace as a workaround for the get bug.
+
+the get bug
+
+We now try to zero in on the real problem with get. The first step is to create a simple function that reproduces the behavior.
+
+fjjget <- function(print = T, mode = "function") {
+    print   # this line to evaluate it
+    ans <- get("print", mode = mode)
+    ans
+}
+
+The print argument needs to be used before the call to get in order for it not
+to be of mode argument. The function does indeed exhibit the problem.
+
+> fjjget()
+[1] T
+> fjjget(mode = "function")
+[1] T
+> fjjget(mode = "logical")
+[1] T
+> fjjget(mode = "numeric")
+[1] T
+> fjjget(print = print, mode = "numeric")
+function(x, ...)
+UseMethod("print")
+
+It appears to be the case that the mode argument is ignored entirely when the object exists in the current frame. Let’s look at get.default to see what we are dealing with.
+
+get.default <- function(name, where = NULL, frame, mode = "any",
+    inherit = F, immediate = F) {
+    code <- if(immediate) 20 else 0
+    if(missing(where)) {
+        if(missing(frame))
+            .Internal(get(name, mode, inherit), "S_get", T, code)
+        else 
+            .Internal(get(name, mode, frame), "S_get", T, code + 2)
+    }
+    else .Internal(get(name, mode, where), "S_get", T, code + 1)
+}
+
+We try a new function that restricts the search to a frame to see what part of the code is broken.
+
+fjjget2 <- function(print = T, mode = "function") {
+    print # this line to evaluate it
+    ans <- get.default("print", mode = mode, frame = 2)
+    ans 
+}
+
+The following example shows that this works okay. It creates an error, so we go into the debugger to verify the value of print.
+
+> fjjget2(print=print, mode="numeric")
+Error in get.default("print", mode = ..: Object "print"
+        of mode numeric not found
+Dumped
+> debugger()
+Message: Object "print" of mode numeric not found
+1:
+2: fjjget2(print = print, mode = "numeric")
+3: get.default("print", mode = mode, frame = 2)
+Selection: 2
+Frame of fjjget2(print = print, mode = "numeric")
+d(2)> print
+function(x, ...)
+UseMethod("print")
+d(2)> 0
+
+1:
+2: fjjget2(print = print, mode = "numeric")
+3: get.default("print", mode = mode, frame = 2)
+Selection: 0
+NULL
+>
+
+Our conclusion is that the mode argument to get.default is ignored if the search is unrestricted and the object is found in the current frame. We could continue to see just what goes wrong, but since the function is internal, we can’t do anything about it anyway.
+
+6.5 Strategy
+
+Remember to breathe.
+
+The primary thing that you want to do when debugging is to continually simplify the problem. This narrows down where the problem can be. For example, when we thought there was a bug in get that was causing trouble in trace, we wrote a simple function that imitated the pertinent part of the situation. When you do this, there can be one of two outcomes; either the problem still occurs in which case you have a simpler problem to solve, or the bug does not occur in which case you have proved there are more necessary conditions than are in the simplification. For nothing can be sole or whole That has not been rent. [23]
+
+Bentley (1986) offers these words of advise: “understand the code at all times, and resist those foul urges to ‘just change it until it works’ ”. The urges are foul because this tactic is likely to cause other bugs down the line, while the real bug is here where it looks right.
+
+There are times of frustration when everything is right except the answer. When this happens to you, remember the following rule.
+
+Capricious Rule 1 The harder a bug is to find, the sillier the error.
+
+For example, I once spent three full days figuring out a bug in some Fortran.
+It turned out that the problem was merely that a number that had been scaled at the start was not scaled back to the original units. Once I realized that, I felt like a fool because several of the symptoms pointed directly there—but it was too simple, and I couldn’t see it. You might try to give me an out by saying that the code wasn’t mine. It would have been four days if it were my own because I would be even more sure that everything was right.
+
+When it is taking a long time to find a bug, switch to searching for the stupidest mistakes possible. Often it helps to make a hardcopy of the code— it can be easier (for some psychological reason beyond my understanding, and unfortunately for the trees) to spot mistakes on paper than it is on a computer screen.
+
+6.6 Bug Reports
+
+Most of the time when programming, the problems that arise are self-imposed. Ocassionally, however, you may find a bug in code that comes from somewhere else. You should then send a bug report to the responsible party. The easier you make it to fix the bug, the more effective your report. Here are the ingredients of a good bug report:
+
+• Identify the software and hardware involved. Always include the general type of machine, e.g., Sparc, Pentium, and it is good practice to be more specific. State what operating system is in use, e.g., SunOS 4.1.3. State the version of S, e.g., S-PLUS 3.3. Give this information even if you think it is superfluous — it may not be. If the problem involves graphics, then whatever software and hardware is involved with the graphics should also be identified.
+
+• Give a simple, direct way to reproduce the problem. The example should either be self-contained, or only use objects that are easily obtained by the readers of the report. Random numbers are suitable if you give the seed so that they are reproducible.
+
+• If the problem results in an error condition, give a traceback of the error.
+
+• State what is wrong. Even if it seems obvious to you, it may not be obvious
+to the reader.
+
+• State what good behavior would be.
+
+• State as best you know the limits of the problem. For example, you might say, “The problem seems to only occur when there is at least one missing value in argument blah of function blahblah.”
+
+• If you think you know how to fix the problem, give your fix.
+
+• Include any workarounds. A workaround can be a kludgy fix to the problem
+function, or a way to get the intended result while avoiding the problem. 
+
+Focus on the part about getting a simple example. Many times this exercise will show you that the bug is in your way of thinking rather than in the software. Other times it will result that there is a bug, but it is different than you had thought. It is always educational—I don’t think there is a better way to learn a language than tracking down bugs.
+
+Here is an example bug report:
+
+Dear Pat,
+
+When I try to use “genopt”, it breaks.
+
+This clearly needs work. Assuming the best of circumstances that Pat is highly motivated to have “genopt” as clean as possible, and that he has ample time to work on it, there is virtually no chance of Pat divining what the reporter witnessed. If Pat is short on either pride or time, then reports like this will make no dent in his day.
+
+It bears repeating that the object is to allow the receiver to identify, reproduce and fix the bug as easily as possible.
+
+I have (of course) presented the easy case. Some bugs are intermittent, and you may not be able to find a way to consistently reproduce the problem. Reporting such behavior can be useful, but you should not raise your hopes too high about the bug being found. Sometimes the data that you are using when the bug occurs is confidential. Try using different data. If that doesn’t work, you can consider disguising the data so that confidentiality is not broken. If all else fails, you can send the report without data that reproduces the problem.
+
+I make it a policy to never submit a bug report the same day that I write it. At worst I can merely check over it with a fresh mind to ensure that others will understand it. At best I will realize that there was some twist that I missed, and the whole report was off the mark.
+
+This is a bit of a digression, but the same sort of principles apply when asking questions on S-news or similar venues. Here is a minimal list of things to include in a question to S-news:
+
+• The version of S or S-PLUS that you are using, including the machine type. 
+
+• What you want to do. Include enough detail so that it will be clear to the
+reader.
+
+• Why you want to do it. It is often the case that there is a simpler way to achieve the goal that may have nothing to do with your specific question.
+
+6.7 Things to Do
+
+Write your own error action function like dump.frames. What do you want it to do? What happens when there are bugs in it that cause an error condition?
+
+Send bug reports for any problems that you know about.
+
+6.8 Further Reading
+
+Programming Pearls by Jon Bentley includes some debugging advise.
+
+If you are overly frustrated, consider reading something humorous, like a
+story by P. G. Wodehouse.
+
+6.9 Quotations
+
+[20] Cecil Day-Lewis “A Failure”
+[21] Elizabeth Bishop “Visits to St. Elizabeths”
+[22] A. E. Housman “Oh Who is That Young Sinner” 
+[23] William Butler Yeats “Crazy Jane Talks with the Bishop”

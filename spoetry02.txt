@@ -1,0 +1,386 @@
+S POETRY
+by Patrick J. Burns
+
+Chapter 2: Poetics
+
+2.1 Abstraction
+2.2 Simplicity
+2.3 Consistency
+2.4 Beauty
+2.5 Doing It
+2.6 Critique of S
+2.7 Things to Do
+2.8 Further Reading
+2.9 Quotations
+
+In which right thinking is advocated.
+
+2.1 Abstraction
+
+Abstraction is the heart of programming — all else is mere detail.
+
+A major symptom of the need to abstract is the occurrence of redundant code. You may immediately realize that you would rather not type the same statements over and over again, so abstracting those lines into a function saves your fingers. But there is a more important reason. Suppose that you decide something needs to change in those lines — you found a bug or the scope of the functionality changed — then the single function holds a tremendous advantage over the repetitious code. In the repetitious case, you need to change every occurrence (yet more typing), and there will be a bug when you miss one — and that bug will be hard to find.
+
+Capricious Rule 1 Whenever a group of at least three similar lines of code occurs more than once, a function shall be written to perform the task.
+
+The simplest form of abstraction in S is to take a task that you use one or more command lines to do, and make that into a function. In the example below we assume the user wants to look at the histogram and get the summary and variance for a number of datasets.
+
+> fjjexplore
+function(x)
+{
+        hist(x)
+        c(summary(x), var = var(x))
+}
+> fjjexplore(freeny.y) # a plot appears
+  Min. 1st Qu. Median  Mean 3rd Qu.  Max.        var
+ 8.791   9.045  9.314 9.306   9.591 9.794 0.09961393
+ 
+Every function embodies an abstraction, some abstractions are more useful than others. Subscripting in S is an example of powerful abstraction. Several ways of approaching subscripting are all handled similarly — there is both generality and simplicity.
+
+One of the benefits of object-oriented programming is that it forces the programmer to abstract the problem. The abstraction chosen may be good or poor of course, but at least there is hope of avoiding an amorphous mass.
+
+DANGER. If your code reads like a phone book, something is wrong. Change it. This generally can be fixed by bundling like objects together and possibly vectorizing.
+
+A particular type of abstraction is indirection. An example is the lib.loc object that states the directories where S libraries may be found. The library function is not limited to looking for libraries in one set place, instead there is a two-step process which is flexible and convenient.
+
+The poet.dyn.load function is another example of indirection.
+
+poet.dyn.load <- function(fname) {
+    if(!exists("Poet.Location"))
+        stop("set Poet.Location to poetry directory")
+    real.loc <- paste(Poet.Location, fname, sep = "/")
+    if(exists("dyn.load"))
+        ans <- dyn.load(real.loc)
+    else ans <- dyn.load2(real.loc)
+    invisible(ans)
+}
+
+There are object files that need to be loaded to use several of the functions described in this book. In order to be loaded, the directory where the files live needs to be known, which is going to be different for each installation. The poet.dyn.load function provides indirection for the location of the object files. It also allows an easy way of changing between dyn.load and dyn.load2 depending on the availability of the functions in specific versions—another instance of indirection.
+
+
+2.2 Simplicity
+
+Programming Perl lists three virtues of programmers: laziness, impatience and hubris.
+Being a lazy person, I think of laziness as the most important of the three. Unix Power Tools credits Programming Perl as describing laziness as the “quality that makes you go to great effort to reduce overall energy expenditure.” Jon Bentley in Programming Pearls takes a slightly different tack, “Good programmers are a little bit lazy: they sit back and wait for an insight rather than rushing forward with their first idea.”
+
+Another good way to be lazy is to prove the feasibility of a large project before you spend a lot of time on programming details. Look for critical points that might not be doable within the given constraints — show-stoppers — and solve those first. A likely example is that speed may not be adequate — moving strategic pieces of the code from S to C can save the day. When looking for show-stoppers, you are concentrating on the weakest portions of your plan. Even if the original plan appears feasible, you may find a more streamlined attack on the problem.
+
+Impatience is useful to make computers do more work than we do (and to make them do all the boring stuff). For instance, it is a virtue to write a small function to do something that you are repeatedly doing on the command line.
+
+Hubris forces the programmer to produce quality solutions, and to attempt the impossible.
+
+I would like to add another virtue to the stack: simple-mindedness. Simpletons avoid whatever is complex. Functions that are simple are easily used and easily adapted. Most importantly, simple functions are less often broken.
+
+Capricious Rule 1 No function shall contain more than 37 lines of code. 
+
+I must confess that I have written a couple 500-line functions of which I am
+reasonably proud, but these are exceptional cases in which a lot must be done.
+
+The absolutely, positively most splendiferous mistake of beginning programmers is to try to do too much in a single function. Think in terms of building blocks. Consider all of the things that need to be done to achieve your goal, and look for ways to break it up into subtasks. And it grew both day and night, Till it bore an apple bright. [5]
+
+But why? Because small functions are easier to understand. Because the subfunctions that you create are going to be useful again. Because a long, involved function is hard to adapt to a slightly different purpose.
+
+Each function should have a contract — it accepts certain inputs, and agrees to produce a specific output. This is the core idea of “modular programming” — that the code can be broken into pieces that can each be verified to do what they are supposed to. If all the pieces work, then the whole system should work.
+
+When changes are made, then testing can be focused near the changes.
+
+A very important thing not to do is write functions with side effects. Specifically, do not write functions that create or modify objects. Instead collect all of the newly created information (probably in a list), and return it from the function. There has been a proposal to ban the <<- operator to make it a little less convenient to change objects behind the scenes; I second the motion. Side effects destroy the transparency of a set of functions, making it more likely that the user will make assumptions that are not true.
+
+On the other end of the same stick, avoid using global variables as much as possible. It is much more transparent when all necessary variables are passed in as arguments. It is also likely that the function will be much more versatile.
+
+Data hiding is another technique to achieve simplicity. The most obvious example of data hiding is some of the print methods in S. For example, an lm object represents a linear regression. The object contains a number of components that are used in prediction and so on, yet its printed form is merely a terse summary of what the object represents. Similarly details can be hidden from functions.
+
+Although the missing function is a useful tool, it should be used only when necessary because it can complicate programming. Let’s look at two functions that do the same thing, but in different ways.
+
+fjjmiss1 <- function(x, y) {
+    if(missing(y)) {
+        ... 
+    }
+    ... 
+}
+
+fjjmiss2 <- function(x, y = NULL) {
+    if(is.null(y)) {
+        ... 
+    }
+    ... 
+}
+
+Assuming that the ellipses in the two functions are the same, the results will be the same. Actually this is not quite true — if NULL is a valid input for y, then the two functions are different. Looking at these functions in isolation, fjjmiss1 has the advantage since it is more general.
+
+When we consider these functions being called by other functions, the picture changes. A function that calls fjjmiss1 needs an if statement that depends on whether or not y is to be missing. A call to fjjmiss2 has no such complication. You not only want each function to be as simple as possible, you want the interaction between functions to be smooth as well. An appropriate use of missing is in the [.stack function on page 228.
+
+Unlike poetry in a natural language where there is rhyme, meter and so on, there are few constraints when writing in S. An exception is the naming of function arguments and list components. We desire simplicity of use as well as simplicity of construction, so it is nice to have argument and component names that can be abbreviated effectively. All of the names should be distinguishable by the first few letters — a sort of anti-alliteration — while maintaining clear identification of the meaning.
+
+Capricious Rule 1 The first two letters of an argument name shall distinguish it from all of the other argument names.
+
+While we are on the subject of virtues, there is yet a fifth to be had — distrust. Distrust everyone’s programming, especially your own. As people gain experience with computing this tends to be a natural occurrence. However, it is better to cultivate distrust actively than to suffer bouts of depression due to disappointment.
+
+2.3 Consistency
+
+If you believe that consistency is the hobgoblin of small minds, then be small- minded when programming. Consistency makes it fast for users to learn the system, keeps some bugs from getting into the code, and makes it easier to fix bugs that do appear. As Robert Frost said in “The Figure a Poem Makes”, “No surprise for the writer, no surprise for the reader.”
+
+Think of consistency as abstraction on a more diffuse scale. If we always use the same argument name for the same thing, we really have abstracted the concept of that argument.
+
+Follow naming conventions to maintain consistency. Argument names in S are traditionally in lower case. However, an exception is when the function takes a function as an argument along with an arbitrary number of arguments for that function. The arguments for the function accepting a function should have its arguments all in capitals. For example, the arguments to lapply are:
+
+X, FUN, ...
+
+The reason these arguments are capitalized is so their names will not conflict with argument names for the function passed in as FUN. You can make a call like:
+
+lapply(as.list(seq(0, 0.1, by = 0.01)), mean, x = prim9)
+
+The X of lapply and the x of mean (in this case set to be prim9) can peacefully coexist. Unfortunately there are several functions that take functions as arguments that do not adhere to this convention. An example of using this convention is the line.integral function (page 320). An alternative method of handling the problem is given in the genopt function (page 331).
+
+Version 3 of S forces a naming convention on methods for generic functions. Version 4 does not enforce the convention, but it is probably wise not to stray from it without reason. Object names tend to be in lower case, you don’t need to follow this but you should decide what you are saying when you capitalize.
+
+Objects that live in database 0 usually start with a dot and have the next letter capitalized.
+
+Give similar arguments in different functions the same name. For example iter.max is used in several functions to specify the maximum number of iter- ations allowed. Some other functions use niter for the same purpose. I think iter.max is a better choice because it more clearly states its meaning, and variables that start with “n” are more common than those starting with “i”. Note that S is not confused when the same name is used in nested functions.
+
+Variables within functions should have clearly meaningful names. It is bad practice to use the same name for more than one meaning within the function (an exception can be made to save space when dealing with large objects).
+
+Avoid names that can be easily confused. For example, nnn and nnnn would be better named n3 and n4.
+
+Capricious Rule 1 No variable shall be named tmp.
+
+All variables are temporary so tmp is not descriptive. Thus it is tempting to
+have it stand for more than one thing in a single function.
+
+On a Horse Who Bit a Clergyman
+
+The steed bit his master; 
+How came this to pass? 
+He heard the good pastor
+Say, “All flesh is grass.”
+
+anonymous (Eighteenth Century)
+
+
+Object-oriented programming is not enforced by S, and if object-orientation is used, there are few constraints on its form. We get more flexibility at the possible expense of consistency. It is the prgrammer’s responsibility to maintain consistency.
+
+2.4 Beauty
+
+Once you have a simple, effectively abstracted function that conforms to all known conventions, you are probably approaching the beautiful.
+
+when the world is mud- 
+luscious [6]
+
+One of the most beautiful functions in S is rep. This function does a lot with three straightforward arguments. The times argument is what makes it transcend mere utility. In its most common use, times says how many replications of the object we want. But turning that on its side in the light of vectorization, we can also give a vector for times that tells how many times to replicate each element in turn. Thus we can give commands like:
+
+> rep(1:5, rep(2, 5))
+ [1] 1 1 2 2 3 3 4 4 5 5
+> rep(1:5, 4:0)
+ [1] 1 1 1 1 2 2 2 3 3 4
+
+Since computers are less amused by ambiguity than we, it should be the case that these two meanings for times meet up nicely for length one objects, and they do.
+
+The length argument states the length that the answer is to be.
+
+> rep(1:5, len = 4)
+[1] 1 2 3 4
+> rep(1:5, len = 7)
+[1] 1 2 3 4 5 1 2
+
+DANGER. The most common bug when using rep is to forget to name the length argument in the call, so that it is interpreted to be the times argument.
+> rep(1:5, 2)
+ [1] 1 2 3 4 5 1 2 3 4 5
+> rep(1:5, leng = 2)
+[1] 1 2
+
+rep could have been written so that it did less, or it could have had a bunch more arguments that made the whole thing complicated. Instead it holds to a middle ground of both power and simplicity. This brings to mind the following rule.
+
+Capricious Rule 1 All functions shall have three to seven arguments.
+
+Too few arguments means that the abstraction embodied by the function is not general enough. Too many arguments means that too much is done and hence it is too complicated.
+
+Arbitrary limits are ugly and should be avoided. S does a good job of not having them. There are only three places that I can think of where they exist. The number of arguments that can be given to a C or Fortran routine through .C or .Fortran is limited to some arbitrary number (about 50 in most versions of S-PLUS, I think). The number of explanatory variables that can be given to the leaps function is limited to something like 31. The maximum order of the polynomial solved by polyroot is 48. If the solution you have to a problem contains an arbitrary limit, your pride (remember hubris?) should get in the way of taking it seriously. Disturbed some rythm, old and of vast importance [7]
+
+The final flourish of creating a beautiful function is to give it a good name. The name should clearly indicate the functionality. The number of characters in the name should be inversely proportional to the number of times it will be typed — a function that is typed only a few times a month can afford to have a longer name than one typed several times a day. A descriptive name for an infrequently used function also makes it easier to find. Avoid using good, general names (like maybe fly or run) for inferior functions.
+
+2.5 Doing It
+
+Much has been made of “top-down” programming. It is sometimes professed that the way to approach a programming task is to specify the main structure and how everything relates to its neighbors in advance, only details are left to be worked out. I suspect that there are few worlds born whole as out of Zeus’ head, but if you run across one, by all means take advantage of it.
+
+In my experience it is more likely that the problem is only partially known (or knowable) in advance. Experimentation provides insight into what the real question is, and how wide of a net can be cast. As more is learned, the proper structure starts to show itself. If “top-down” is taken to mean think before you type, then I like it; but if taken to the extreme, you may paint yourself into some corners. An apt slogan is one seen on bumperstickers: “Think Globally, Act Locally.”
+
+A good image for code generation is one of punctuated evolution. There are short intervals of massive changes interspersed with long periods of almost no change at all. The periods of change can be spurred either by new needs or by a better structure becoming evident.
+
+In many of the examples in this book two or more versions of a function are given, with a later version being (hopefully) an improvement of the preceeding version. Obviously the aim is not to produce examples of poor coding for you to emulate. The main reason is to drive home that revising code should be standard practice. Write an initial version, play with it a little, then fix the limitations that you’ve found—always trying to move toward simpler and more general.
+
+Unlike living creatures, computer programs unfortunately often need to exhibit backward-compatibility. This is a dark cloud over beautiful programming — either consistency, non-redundancy or backward-compatibility has to give way. If the program is not wide-spread, then breaking the compatibility by forcing the use of the new structure is best. If fame has spread though, the choices tend to be reduced to retaining the same interaction (though internals might change), or having two systems that do basically the same thing.
+
+This is a caution to get it right the first time. If you have a significant piece of code, give it to a few people to test and comment on. Do not sell it. Do not propagate it over the internet (do as I say, not as I do). Think about it, hone it until it is right, then prosyletize.
+
+There is an adage (never followed) that software should be written once, then thrown completely away and rewritten. Nobody ever does it because it seems extraordinarily wasteful, but I’m sure it is closer to optimal than how software actually is written.
+
+In the midst of all of this pondering on programming etiquette, truth may break in. It is seldom the case that programming is performed with no con- straints. As a deadline worth millions looms, there may not be time to create perfect functions. Take the gold and tidy your code later. So was I once myself a swinger of birches. [8]
+
+Think safety
+
+Many building construction sites have the prominent sign “THINK SAFETY”. There should be such a sign whereever software is under construction.
+
+Keep in mind that code evolves and adapts. It is not enough to get it right for this one use — think also of how minor changes to the code might introduce bugs. With trembling care, knowing that most things break; [9]
+
+For example, the length of a vector may be 5 in a function, so you can use 5 as the length of the vector — hard-code the value — but someone who changes the code and uses a different length vector may not find all of the locations where 5 means the length of this vector. It is safer to assign a name to the length of the vector.
+
+If you are adding arguments to a function that is already in use, then put the new arguments at the end. If you do this, then calls based on the previous definition of the function will continue to work properly.
+
+If the use of a function critically depends on the value of a default, then explicitly give the default for that argument. A common fragment of code is
+
+if(any(is.na(match(x, y))))
+
+which depends on the default value of the nomatch argument to match. If someone decides to create their own version of match with the default value of nomatch changed to 0, say, then the above construction will not work. Safer would be:
+
+if(any(is.na(match(x, y, nomatch=NA)))
+
+DANGER. Do not change the match function’s default value of nomatch be- cause there are numerous places that do not use the safe approach.
+
+Here is an example of where thinking of safety would have helped.
+
+> jjpbx ab
+1 1 -0.7710749
+2 2  1.3230554
+3 3 -1.0032299
+> class(jjpbx)
+[1] "matrix"
+> jjpbx[1,] ab 1 -0.7710749
+> dim(.Last.value)
+NULL
+
+It seems perfectly natural to me that we may want an object of class matrix to remain a matrix when subscripted — that is, for the default value of the drop argument in subscripting to be FALSE. Here is a method to do that.
+
+[.matrix <- function(x, i, j, drop = F) {
+    cl <- class(x)
+    x <- unclass(x)
+    ans <- x[i, j, drop = drop]
+    # avoid NULL matrices
+    if(length(dim(ans)))
+        class(ans) <- cl
+    ans 
+}
+
+Subscripting indeed works, but now the drop function doesn’t work on these objects.
+
+> jjone.d <- jjpbx[1,]
+> dim(jjone.d)
+[1] 1 2
+> dim(drop(jjone.d))
+[1] 1 2
+
+Adding the seven characters ,drop = T to the definition of drop fixes the problem:
+
+drop <- function(x) {
+    n <- length(dim(x))
+    if(n == 0)
+        return(x)
+    eval(parse(text = paste("x[", paste(rep(",", n -
+         1), collapse = ""), ",drop = T]")))
+}
+> dim(drop(jjone.d))
+NULL
+
+This will cause drop to fail on objects that do not have a drop argument in subscripting but do have a dim—that seems quite acceptable.
+
+Put error messages where appropriate (using the stop function). This is harder than may be naively thought. You do not want to unduly clutter or weigh down functions with excessive error checking. On the other hand, you want errors when they do occur to produce a message that will make the cause of the problem clear. In general, low-level functions that aren’t intended to be called directly by the user should have few error checks, functions called a lot by inexperienced users should be heavily checked.
+
+Most important is that a function should never be allowed to give a wrong answer. Better a totally undecipherable error or the computer crash than two times two equal five.
+
+Here is how I decide where to put error checks:
+
+• If the problem will result in a wrong answer, put in a check (and look around for more of the same).
+
+• If the problem will result in an error farther on and the error condition will
+be vague or misleading, then put in an error check.
+
+• If the problem will create a reasonable error elsewhere but this is likely to be used by novices, then put in an error check.
+
+Implicit in the list above is that thought has been put into where errors come from. Such thought is useful not only for placing error messages, but also to eliminate bugs.
+
+Once you know where you want an error message, you need to decide what it is to say. I believe in short messages (so the user will actually read it). However, clarity and accuracy should take precedence over brevity.
+
+Documentation
+
+There are three forms of documentation that you can write for your S code. Help files, and comments in the code are two types. The other (which I term prose documentation) is an explanation that might appear as a user’s manual. Prose documentation would tend to show how to use a group of functions in a coordinated manner as well as motivating why one would want to use the functionality.
+
+I think writing a help file for a function is an integral part of writing the function. (In version 4 the documentation is a part of the S object rather than a separate file, the principles remain the same.) Writing the documentation clarifies how the function fits with others, and suggests tests for bugs as well as being a useful product in its own right. You can not possibly know that your function is written as well as possible until you have written a thorough help file for it.
+
+When writing a help file, it is a good goal to write it so that a person without a computer and with just the help files can confidently write correct programs. (This is a dreadful way to program, but it is a good image to have when writing help files.)
+
+The prompt function produces a file that is a template of the help file you want. It fills in many of the items of interest and marks the spots where you need to put in information.
+
+Here are some things to consider when writing a help file:
+
+• Describe each argument fully. There are a few possibilities:
+
+• The description is clear. Fine. You need a measure for what “clear” means — think of a reasonably intelligent person who is completely uninformed about the subject. The description should include the type of object expected: “integer giving the number of ...” is preferable to “number of ...”; “matrix of explanatory data”, not “explanatory data”. This gives more opportunity to ponder what happens if the input is different
+from what is expected, as well as being more explicit for the user.
+
+• The description is clear, but does not match what the function actually does. Change the function or the description, as appropriate. For example, you might have a statement like “numerical array. When three-dimensional, then ...” I often find that I don’t know what the “then” clause is, that I know what it should be but I’m not sure the function does that, or that the function does something more sensible than my description. This is a very expedient way to force me to think through what the function should be doing, to debug the function, and to document it all in one step.
+
+• The argument is hard to explain. Rethink. If the argument can’t be explained, then surely users will get it wrong, and more likely the whole thing is ill-defined. An ill-conceived argument is a potent source of bugs.
+
+• Are the arguments in an appropriate order? Required arguments should be first. The order should match that of functions with similar arguments. In general, the most used arguments should be near the front. Do all of them have good names that are consistent with other function arguments?
+
+• Explain the output fully. While you do this, wonder whether everything relevant is returned, and nothing but.
+
+• If there are side effects, spell them out.
+
+• Provide examples that demonstrate the use and usefulness of the function. If possible, give examples that the user can copy directly to get output — the inbuilt datasets are expedient for this. This is the section that is likely to be the most informative if done properly. No matter how clear and concise you think your explanations are, a good example will better answer the user’s questions.
+
+• State all else that would be useful to the user. This might include references to literature, details of the computing algorithm, and explanation of how to use the function.
+
+• A most important part of a help file is the BUGS section. I realize that it’s fashionable to pretend that bugs do not exist, but those who claim to have no bugs in their code are either fools or liars. Many functions as they are written contain known bugs, even if these are just limitations on what they might be expected to do. Write these down while they are fresh in your mind so that users are warned, and you have a clear map of what remains to be done to the function.
+
+My feeling on comments in code is that there should be some, but they should tend to be sparse. Put in comments when you are doing something clever — it is very easy to forget how clever you are. Also add comments if you are working around a bug. Explain the bug fully so that it will be clear when the workaround can be removed. This is important — I have several comments scattered through my code that inform of a workaround, but do not contain enough information to know when the workaround can be abandoned.
+
+If your code needs a lot of commenting to make it understandable, then you should consider rewriting the code so it is simpler rather than adding comments.
+
+Minimize expense
+
+A programmer’s job is to minimize expense. Often this optimization is too narrowly defined as minimizing the memory and time usage of the code as it is run. Part of the reason for focusing on these is that they are the easiest to measure.
+
+The actual problem also includes the time to program the solution, the time to train users, the time to maintain the code, the time to adapt the code to new uses, and so on. It is hard to overestimate the time required to maintain code, it is an important component of the expense. Remember that humans are expensive (and easily frustrated or bored), while computers get cheaper all the time.
+
+2.6 Critique of S
+
+I give S high marks for having effective abstractions and providing the ability to create further abstractions. It allows and encourages a great deal of simplicity. On the whole it is a very poetic language.
+
+S does have its faults, though. One is that the name-space is easily cluttered. Although you can specify that a particular name should come from a specific place, it is not a very convenient operation. I don’t see any solution to this, you merely need to be careful about naming objects.
+
+Another weakness of S is that it has a lot of inconsistencies and redundancies. Almost all of this is because S has changed over the years, and there has been the desire to have as much backward-compatibility as possible. So some things that should logically be object-oriented are not, some functionality is duplicated, some functions use formulas while similar functions do not, and so on. There are also some function arguments that have different names in different places. All of this can frustrate a new user. However, all of the inconsistency in S is on the surface — the underlying language is incredibly consistent and simple.
+
+2.7 Things to Do
+
+Take a complicated function (preferably one of your own) and abstract the portions of what it does into several subfunctions. Repeat this on the same function as many times as you can, performing the abstraction differently each time.
+
+Put comments into your functions so that they are completely explained. Then revise the functions so that as much commenting as possible can be eliminated.
+
+Write help for each of your important objects. It can be very useful to document non-functions as well as functions.
+
+Find a beautiful S function (rep is not an allowable answer). What is good about it?
+What would be good functionality for a function named fly?
+
+For each S function available to you, decide how to make it better.
+
+2.8 Further Reading
+
+The books Programming Pearls and More Programming Pearls by Jon Bentley are very good at encouraging good programming.
+
+The Elements of Programming Style by Kernighan and Plauger has much wisdom that is still applicable, even though it was written in the late Paleolithic. Here is a sample: “The fact that a four line comment is needed to explain what is going on should be enough to rewrite the code. An even better reason is that the comment is wrong.” They often present some published code and then show how it can be improved. A wonderful illustration of their spirit is that some of the examples of poor programming in the second edition are their code from the first edition.
+
+Structure and Interpretation of Computer Programs by Abelson, Sussman and Sussman has abstraction as its main theme. It uses a form of Lisp as its language of choice—most of the examples could be translated into S without undue contortion.
+
+When real conceptual trouble strikes, I occasionally pull out How to Solve It by George Polya. This book talks about how to solve mathematical problems, but the techniques are suitable for any problem solving. An example of his wisdom is that it is often useful to picture what a solution would look like, and then work backwards from there. The most memorable part of the book for me is his rules of style, which I paraphrase:
+
+Rule of Style 1 If you have nothing to say, then don’t say it.
+
+Rule of Style 2 If by some miracle you have two things to say, say one thing and then the other.
+
+2.9 Quotations
+
+[5] William Blake “A Poison Tree”
+[6] e. e. cummings “In Just-”
+[7] Theodore Roethke “Moss-Gathering”
+[8] Robert Frost “Birches”
+[9] Edwin Arlington Robinson “Mr. Flood’s Party”

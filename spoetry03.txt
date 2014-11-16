@@ -1,0 +1,904 @@
+S POETRY
+by Patrick J. Burns
+
+Chapter 3: Ecology
+
+3.1 Databases
+3.2 Object Names
+3.3 Divide and Conquer
+3.4 Environment
+3.5 Source Control
+3.6 Test Suites
+3.7 Time Monitoring
+3.8 Memory Monitoring
+3.9 Things to Do
+3.10 Further Reading
+3.11 Quotations
+
+In which peaceful relations are encouraged.
+
+This chapter starts with topics concerned with the use of S in general — databases and their organization, naming ob jects. Then it turns to sub jects more directly related to programming.
+
+3.1 Databases
+
+S has a search list where it looks for all of the objects that it needs. (A better name would be “search path” since it is not an S list, but the usage is established.) You can see what databases are currently on the search list with the command:
+
+search()
+
+The first database on the list is called the working database, and this is where assignments are written (it is possible to make assignments elsewhere). You need to have write permission for the working database in order to have S happy with you.
+
+When S needs to find an object, then it looks in each database in the search list in turn. Once it finds an object with the correct name (and possibly the correct mode), it uses that object. So an object named x that lives in database 2 will mask an object named x that lives in database 3. This is a simplified version of how S searches for objects, for a more truthful explanation, see page 210.
+
+You can add to the search list with the attach function. Typically you give it a character string which names a directory containing S objects:
+
+attach("../other_directory/.Data")
+
+This will place the new database in position 2, but an optional argument allows you to select where in the search list the new one is to fall.
+
+You can attach lists and data frames to serve as databases. The columns of data frames and the named components of lists are the objects within the database.
+
+> x1
+Error: Object "x1" not found
+> jjx <- list(x1 = 1:6, x2 = letters[1:9])
+> attach(jjx)
+> x1
+[1] 1 2 3 4 5 6
+
+This can be an excellent way to organize computation in some situations. I don’t recommend using a data frame or a list as the working database, however.
+
+To remove databases from the search list, use detach. Usually you give detach the number of the database that you want to disappear.
+
+Libraries are mildly special directories of S objects. To see what libraries are available to you, do:
+
+library()
+
+To get some more information about a library, you can do a command like:
+
+library(help = "examples")
+
+and do
+
+library(examples)
+
+to attach the library. In version 3 of S the only real difference between a library and an ordinary directory of S objects is that the .First.lib function will perform some startup actions when the library is attached. Also the user does not need to know the path of the directory of functions. If you want to add libraries of your own, then S-PLUS allows you to create a lib.loc object that is a character vector of the pathnames of the directories where libraries may be found.
+
+DANGER. In (most) versions of S, there are some superficial bugs when lib.loc is set. I don’t know of any that are harmful.
+
+3.2 Object Names
+
+When I first came to S, I was thrilled that the objects I created remained permanently — even after I quit S. This was in contrast to systems where I needed to explicitly state what I wanted to save before quitting. By the time my directory contained a few hundred objects, I began to learn the price to be paid for this convenience. Wouldn’t it be nice to be able to discover the name of any particular object you want, or to be able to quickly decide what to throw away when the system administrator yells at you for hogging all of the disk-space? Look on my works, ye Mighty, and despair! [10]
+
+The types of objects that you create can be divided into five categories: permanent functions, permanent data, modified system functions, temporary functions and temporary data. Some people might want to add a category of derived data, to represent data that can be reproduced, but at some cost. Permanent functions are functions that you have written that you will continue to want to use. Likewise, permanent data are objects other than functions that you want to keep long-term. What I call modified system functions are those that are similar to an in-built function, but does something slightly different. For example, I have a function called p.unix.time which is basically the same as unix.time, except that it returns 3 numbers: the total computer time, the clock time and the memory size. Temporary objects are those that will not affect you adversely should they disappear.
+
+With proper naming conventions for your objects, you can ease the burden of object proliferation. A convention for temporary objects is most important. I start the name of a temporary function with fjj and start the name of other temporary objects with jj. Here’s my reasoning: jj is easy to type, it doesn’t appear in the words of any natural language I’m likely to learn soon, it seldom appears in abbreviations, and it can be thought of as deriving from “junk”.
+
+Other naming conventions that I’ve seen include starting the object name with foo, tmp or junk, or using triples of letters. The problem with the first three is that it is conceivable that the name of an object you want to keep may sneak into the convention. The problem with the last is that it is not convenient to list them.
+
+I find it very useful to differentiate between temporary functions and other temporary objects. Functions are small so throwing them away buys you very little disk-space. Functions also tend to have a longer useful life than data — I can read a function and know what it does, but a matrix of numbers even with distinguishing dimnames soon becomes a mystery.
+
+If I want to list all of my temporary objects, I can say:
+
+objects(pat = "jj")
+
+To exclude the temporary functions, I say:
+
+objects(pat = "^jj")
+
+(The “hat” symbol indicates the beginning of a word.) I can remove all of these with
+
+remove(objects(pat = "^jj"))
+
+This brings us to an advertisement for some form of command line editing. If you typed the last statement but missed typing the second “j”, then you might well be sorry. A safer approach is to look at the result of the objects command, and then wrap the call to remove around the same call to objects. Command line editing is the ability to recall past commands, and to re-execute them, possibly after moodifying the command. This means that text editing is involved. On Unix there are essentially two choices for an editor—emacs or vi.
+
+If you know neither, then learn emacs. For command line editing in S, the best method is to use S-mode in emacs. Admirers of S-mode are many and fervent. If you already know vi well and you have S-PLUS, then an alternative is to use the e flag when you start S-PLUS:
+
+% Splus -e
+
+You can then hit the “escape” key, go back into past commands and edit them.
+
+A more complicated removal might be handled like:
+
+jj <- objects(pat = "^jj")
+jj <- jj[-c(4, 9, 138)]
+remove(jj)
+
+Note that jj may be one of the objects removed. That’s okay—suicide is al- lowed.
+
+In S-PLUS, objects.summary reports various information on objects:
+
+> objects.summary(pat = "jjm", what = c("data.class",
++     "storage.mode", "extent") )
+        data.class      storage.mode    extent
+fjjmem1 function        function        3
+fjjmem2 function        function        3
+fjjmem3 function        function        3
+fjjmem4 function        function        4
+jjm     matrix          integer         3 x 1 
+jjmat   matrix          double          5 x 5
+
+In the example above we ask for objects in the working database (the default) that have names containing “jjm”, and we do not want the dataset date to be part of the output. Below we want to get all of the functions in the working database (and nothing else), and sort them by date:
+
+objects.summary(mode="function", order="dataset.date")
+
+It is good to have a naming convention for modified system functions. A method I’ve seen is to append f. to the system name, f.matrix for example.
+
+This seems fine if you are an isolated user. However, if you are in a group of S users and functions are likely to be shared, elaboration is politic. Consider the situation of two or three f.matrix functions in a group. Person x uses function fy written by person y, function fy uses the f.matrix written by y, but fy sees the f.matrix written by x when x uses fy (got that?). The worst type of error might occur — everything looks fine, but the answer is wrong.
+
+A solution is for each individual to have their own prefix to use. We would have x.matrix and y.matrix instead of two f.matrix functions. This also makes it easier to direct questions and comments to the right person.
+
+The diffmask function will tell you if and how two objects of the same name differ:
+
+diffmask <- function(x, old = loc[2], new = loc[1]) {
+    if(!is.character(x) || length(x) > 1)
+        x <- deparse(substitute(x))
+    loc <- find(x, num = T)
+    if(any(is.na(c(old, new))))
+        stop("need two locations for object")
+    if(is.numeric(old))
+        oldlab <- old
+    else oldlab <- "old"
+    if(is.numeric(new))
+        newlab <- new
+    else newlab <- "new"
+    filenames <- tempfile(paste("database", c(oldlab, newlab), "", sep = "."))
+    on.exit(unlink(filenames))
+    dput(get(x, where = old), filenames[1])
+    dput(get(x, where = new), filenames[2])
+    unix(paste("diff -c ", filenames[1], filenames[2]), out = F)
+}
+
+CODE NOTE. If both old and new are given, then there is no need to do the
+find command. Taking that into account, the line could be changed to:
+
+if(nargs() < 3)
+    loc <- find(x, num = T)
+
+This uses find unless all three arguments are passed into the call. In this case, the probability that all three arguments will be given is infinitesimally small and the find call is not expensive, so I opted not to do this. However, there are circumstances in which it is decidedly valuable to avoid computations.
+
+I find diffmask quite useful — I wrote it for myself, not the book. Often I have a local version of a function that is also somewhere else on the search list because I am modifying or debugging the function. I use diffmask to see the current modifications.
+
+3.3 Divide and Conquer
+
+No matter how organized your naming convention, there comes a time of too much. The most common solution is to create separate S data directories for the various projects you work on. Here is a Unix script to set up an S directory in the current directory.
+
+mkdir .Data
+mkdir .Data/.Help
+# you may need to change the next line
+Splus < $HOME/pS/dotFirst.q
+
+Assuming that the script is called Shere and is executable, then you merely need to go to the directory where you want to run S, and give the command Shere to Unix. After which you can use the new .Data by starting S from the directory.
+
+The dotFirst.q file contains a solution to the main problem with dividing your S objects into separate directories. Almost everyone has a set of general functions that they always want to have available. You don’t want to copy the same functions into each directory (bad, bad, bad), but you can have one directory where your general functions live, and always attach that directory as S starts.
+
+You may be wondering why I dislike the idea of copying functions around. This is the redundancy problem once again, but on a different scale. Suppose that you do copy a function into several different directories. Now suppose that you discover a bug in the function as you are using it in one of the directories. You will fix the bug where you are working, but — barring extraordinary circumstances — you will not change it in all of the other directories. It is likely that you will need to rediscover the bug in one or two more directories before the bug is extinct. Even without bugs, extra features may be added to some versions of the function so that you end up with several similar functions that are non-trivial to get back into sync with each other.
+
+A .First function is used to perform tasks as an S session starts. Just before S gives you the first prompt of the session, it checks to see if there is a .First function in the working database, and if so, evaluates a call to it. (There is also a .Last, but I haven’t yet discovered a good use for it.) Here is what that dotFirst.q referred to in Shere might look like:
+
+.First <- function() {
+    options(error = dump.frames, object.size = 20000000)
+    attach("../pS/dotFunctions")
+    cat("attaching dotFunctions\n")
+    if(exists(".privateFirst", where = 1))
+        .privateFirst()
+    cat("the answer to 2 * 2 is", 2 * 2, "\n")
+}
+
+The statement involving .privateFirst allows each individual directory to have its own start up actions. Under this scheme you use .privateFirst like you would normally use .First.
+
+Note that the attach statement presumes that all of the places where S is to be used are on the same level of the directory tree. If this is not to be the case, then that line needs to be changed — in S-PLUS a statement like getenv("HOME") could be part of the solution.
+
+What is important is the effect of dividing your objects rationally while maintaining convenience. The exact mechanism is not very important. You may have noticed that abstraction is still the operable concept. It is just that now we are attempting proper abstraction of groups of S objects.
+
+In S-PLUS there is also a .First.local that can be used at a site so that a set of startup actions is performed for all of the users. For example, objects may be assigned, and libraries attached.
+
+3.4 Environment
+
+Your S session is controlled by a number of options that can be inspected and changed by the options function. There are quite a number of options each of which tends to be recognized by one or more functions, and some of the options are directed at the S language itself.
+
+You can add your own options — there is no distinction between the options that come with S and those that you create. However, with freedom comes responsibility. When you intend to change an existing option but misspell it, then you get a new option and the old option still retains its old value. The function soptions (as in “safe options”), listed below, gives a warning when you are adding an option so that you will realize when you’ve made a mistake. You can always use soptions in lieu of options.
+
+soptions <- function(...) {
+    in.names <- names(list(...))
+    oldnames <- names(options())
+    newnames <- in.names[!match(in.names, oldnames, nomatch = 0)]
+    if(length(newnames)) {
+        warning(paste("new options added: ",
+                paste(newnames, collapse =", ")))
+    }
+    ans <- options(...)
+    if(.Auto.print)
+        ans
+    else invisible(ans)
+}
+
+An example of when this is useful is:
+
+> soptions(warning = 2)
+Warning messages:
+new options added: warning in: soptions(warning = 2)
+
+The actual option is named warn and what should have been typed was: 
+
+> soptions(warn = 2)
+
+If the options function were used instead of soptions, then no warning would have appeared and the user would probably not realize for a while that the option was not changed. This example also points out a weakness of soptions — there will be no warning message if the warn option is not set properly.
+
+Some of the more important options are now discussed. See the options help file for more information on these options and to learn about other options.
+
+The object.size option limits the size in bytes of an object when it is created. This is a safety feature so that blunders along the lines of
+
+1:Inf
+
+are not taken seriously. In many versions of S the default value is rather small, so this is a good candidate to be changed in your .First. There is also an object.size function that returns the size in bytes of its argument.
+
+The digits option controls the number of significant digits that are printed.
+
+> cat(pi, "\n")
+3.14159265358979
+> print(pi)
+[1] 3.141593
+> cat(format(pi), "\n")
+3.141593
+> options(digits=14)
+> print(pi)
+[1] 3.1415926535898
+> cat(pi, "\n")
+3.14159265358979
+
+From this example you can see that print obeys the digits option, as does format, but cat does not.
+
+The width and length options also concern printing. width gives the maximum number of characters to put on a line. For example, it should typically be 80 when printing to a terminal, and it is set at 55 for listings in this book. length specifies the number of lines per page, and is used, for instance, to decide how often to print column headings when printing a matrix. If you only want the column labels printed once at the start, then set the length option to some large number.
+
+The error option gives the action to be performed when an error during evaluation occurs. This can be either a function (with no arguments) or an expression of a call to a function. So you can say
+
+options(error=dump.frames)
+
+or
+
+options(error=expression(dump.frames()))
+
+but not
+
+options(error=dump.frames()) # WRONG
+
+Your two main choices for error are dump.calls and dump.frames. The former returns the stack of calls at the time of the error, while the latter returns the stack of calls plus the state of each variable in each call at the time of the error. See the debugging chapter to learn why you care. The ignore.error function on page 215 is an instance where it is natural to set the error option to NULL.
+
+The warn option controls what happens when a warning is encountered. The two extremes are -1 to suppress warnings, and 2 to convert warnings to errors.
+
+You can change the prompts that S gives by using the prompt and continue options. You may, for example, want the prompt to include the name of the current directory.
+
+The keep option states what should be kept in a certain hash table. After an S session starts up, each object that is used is tested to see if it should be put in the hash table. An object that is in the hash table is found quicker than objects that are not in it. Usually keep is set to "function" so that functions and only functions are hashed. You may have noticed that a function runs slower the first time it is called in a session than subsequently. You can set keep to "any" which will put all objects in the hash table. This is generally a bad idea because you will soon use lots of RAM, but it can be a useful strategy to temporarily use this setting to hash some objects that will be accessed numerous times in the session. Going the other way, keep can be set to NULL to disable hashing entirely. This could be used if you are going to access a large number of functions only once. See the discussion of synchronize on page 103 for more on this hash table.
+
+Some other more esoteric options that can be useful are expressions, echo and interrupt. See page 219 for a discussion of how options are implemented.
+
+The par function is similar to options in many respects, but it controls the behavior of S graphics. The graphics parameters mostly have names consisting of three characters, so the meaning of a graphics parameter is not completely discernible from its name—take this as a lesson of how not to name objects.
+
+DANGER. Although generally analogous, the options and par functions do have different conventions for the return value.
+
+> par("mar")
+[1] 5.1 4.1 4.1 2.1
+> par(c("mar", "cex"))
+$mar:
+[1] 5.1 4.1 4.1 2.1
+$cex: [1] 1
+
+When querying the value of a single graphics parameter, par returns the value of the parameter, and only returns a list of values when two or more parameters are queried. In contrast, options always returns a list. However, when a graphics parameter is being set, then par does return a list (invisibly) so that the following idiom will work:
+
+on.exit(par(old.par))
+old.par <- par(mar=c(8,4,1,1) + 0.1)
+
+3.5 Source Control
+
+It is wise (and more relaxing) to have your code under a control system. I will talk about SCCS, but there are others, such as RCS. SCCS is an acronym for “Source Code Control System”. The idea is that you have a history of versions of the code (or whatever) so that you can recover any particular version. The main reasons to use such a system are: the new version that you just wrote may not work right so you want to go back to what did work; you need to reproduce the state that existed at some specific time in the past; you are protected from accidentally destroying what exists. Believe me, the last point is no small bonus.
+
+The two S functions called sccs and diffsccs make it trivial to put S objects under SCCS control. The only preparation is to make sure that you have SCCS available on your machine and to create a subdirectory called SCCS in the directory where you want the control files to live. Start S in this same directory. An object named my.fun is put under control with the command:
+
+sccs(my.fun)
+
+This creates a file in the current directory called my.fun.q which is a dump of the function. Furthermore there is a related file inside the SCCS directory to keep track of the versions (done in a memory efficient manner).
+
+My usual method when I am about to edit a function is to do:
+
+diffsccs(my.fun)
+
+to see if what is there is different than the last SCCS version. If it is, then I use sccs on it, and then edit the function. I have found it best to try out my changes to a function rather than immediately creating a new version, hence the reason that SCCS is often not up-to-date. If the S object has a name that is not nice for a filename, then using the xname argument to sccs and diffsccs is essential. Here is an example:
+
+diffsccs("/.rationalnum", "Div.rationalnum")
+
+If you want to replace the current definition of a function with the last version (or if you accidentally removed the function), then use source or restore on the .q file. To get a version farther back, you will need to use an SCCS command before using source or its relatives.
+
+In addition to putting S objects under source control, it is good to control help file, C and Fortran sources. For these you need to learn more about SCCS. Unix Power Tools by Peek, O’Reilly and Loukides (1993) has a brief introduction to SCCS (despite what they say, nothing needs to be added to files put under SCCS). Details of the use of SCCS are available in the man page. You may find it useful to write some simple scripts or aliases to perform the tasks with names that make sense to you.
+
+Here are the listings for the two functions:
+
+sccs <- function(x, xname = x, new = !length(unix(paste("ls",
+        xfile), out = T)), already.out = F) {
+    
+    ok.dump <- function(x, xfile, do.dd) {
+        if(do.dd) {
+            data.dump(x, xfile)
+        } else {
+            dump(x, xfile)
+        } 
+    }
+
+    # start of main function
+
+    if(is.character(x)) {
+        if(length(x) > 1)
+            stop("only one at a time")
+    } else x <- deparse(substitute(x))
+    
+    do.dd <- !is.function(get(x))
+    
+    if(do.dd) {
+        xfile <- paste(xname, "Q", sep = ".")
+    } else {
+        xfile <- paste(xname, "q", sep = ".")
+    }
+
+    if(new) {
+        ok.dump(x, xfile, do.dd)
+        unix(paste("sccs create", xfile), out = F)
+        unix(paste("rm ,", xfile, sep = ""), out = F)    
+    } else {
+        if(!already.out)
+            unix(paste("sccs edit", xfile), out = F)
+            ok.dump(x, xfile, do.dd)
+            unix(paste("sccs delget", xfile), out = F)
+    }
+
+    hcom <- paste("test -f ", xname, ".d", sep = "")
+
+    if(unix(hcom, out = F))
+        warning(paste("file ", xname, 
+                      ".d not found, do you have a help file?", sep = ""))
+    invisible(xfile)
+}
+
+CODE NOTE. This looks messy, but it is mainly a bunch of decisions. Most of the trickier parts will be covered in the next chapter. The main substance of the function is knowing the SCCS commands, but switching between dump and data.dump is an important feature.
+
+CODE NOTE. The function has two different ways of testing for the existence of a file. This is done for the purpose of demonstrating options. I advise you to pick one way of doing a task, especially in a single function.
+
+The “.q” in the file names comes from QPE (S’s nom de guerre). The ending “.s” is sometimes used for assembly code.
+
+diffsccs <- function(x, xname = x) {
+    if(is.character(x)) {
+        if(length(x) > 1)
+            stop("only one at a time")
+    }
+    else x <- deparse(substitute(x))
+    do.dd <- !is.function(get(x))
+    xfile <- tempfile("dumpsccs")
+    on.exit(unlink(xfile))
+    if(do.dd) {
+        data.dump(x, xfile)
+        suffix <- ".Q"
+    } else {
+        dump(x, xfile)
+        suffix <- ".q"
+    }
+    cmd <- paste("diff -c ", xname, suffix, " ", xfile, sep = "")
+    invisible(unix(cmd, out = F))
+}
+
+CODE NOTE. Actually this is misnamed since it doesn’t depend on SCCS at all. It checks the difference between the current value of the object in S and a representation of it in a file in the current directory — it presumes that the file is not being changed behind the back of sccs.
+
+3.6 Test Suites
+
+Correct answers are nice. A step in that direction is knowing that today’s answers are the same as last week’s. The verify function — given below — does this. Here are some uses of verify. You have made some efficiency improvements to your functions, and you want to ensure that you get the same answers. You have moved to a different version of S, or a different version of the operating system, or a different architecture. You are making your code publicly available and it is desirable that the user has some assurance that they are getting good answers on their setup. A particularly vivid example is that the person may want to know if the code works under both S and R.
+
+Tests for software are usually given less than their due. Testing ranges from formal test suites (like those that verify runs) to the completely informal. Although I think it is very important to have formal test suites for functions that you depend upon, probably the informal testing of functions as you write them is the most important testing that is performed. The informal testing should be fodder for the formal tests. I’ll now discuss three types of tests: black box, white box and regression. I think it is good to know these distinctions, though it is not necessarily clear into which category a particular test falls.
+
+The name “black-box test” comes from the idea that the person writing the test does not know anything about how the code is written — code need not even exist when the test is drafted. The tester merely knows what the code is supposed to do. If there is a specification for the code, then this is obviously a starting place for the tests. Documentation of the code — especially if written by some one other than the programmer — is a good source. The test should definitely include specific examples in the documentation (and hence it becomes a test of the documentation also). Implications that the documentation makes should be tested. Test the most common uses. Once that is done, try to get the test to hit as much functionality as feasible.
+
+White-box testing means that the tester has knowledge of the code. Given knowledge of which S functions are used, tests may be based on weaknesses or common misuse of some of those functions. The structure of the code may imply areas where it is most vulnerable.
+
+Regression tests are tests of bugs that have been fixed. It seems ludicrous, but these are actually very valuable. First off, reincarnation definitely exists for bugs—it is not at all uncommon for a bug that had been fixed to reappear. Also the bug may be an indication of a general weakness that the test might guard against. When you write a regression test, it is important that you test that the code is right, not that you don’t get a particular wrong answer. That is, you want the test to be:
+
+2*2 == 4 # goodtest
+
+not
+
+2*2 != 5 # poortest
+
+Although there is no truly effective way to test software, there are some
+general principles that are good to follow.
+
+Test along “seams”. Just what this means depends on the situation, but it can mean values of 1 or 0 when positive integers are expected, zero length inputs, singular matrices, arrays that have one or more dimensions only 1 long, etc. For example, it was important to make sure that soptions (page 45) worked when there were no argument names.
+
+Give the function garbage. This should not just be random garbage, it should be inputs that a naive user might feed the function. For instance, we may well have written the sccs function so that it only accepted a character vector containing the names of objects. If we had written it that way, then a “garbage” input would have been the unquoted name of a function.
+
+A class of bugs to look for — with either black or white box tests — is “one-off” bugs. For instance it is easy to get the index wrong when translating between S and C, or to get the size of something wrong by not including both ends.
+
+Another class of bug is “first-only”. Sometimes a routine will work only the first time it is used in a session. Alternatively, it might not work the first time, but work subsequently. Bugs like this are the result of some global variable not operating properly.
+
+Testing should be continuous. Expert programmers are always skeptical, they forever question if everything is making sense. ’tis our turn now To hear such tunes as killed the cow. [11]
+
+Let’s think about what sort of informal testing should be done for the sccs function listed above. The first thing, of course, is to make sure that it works at all — so test it on a function that hasn’t been put under control, then change that same function and use sccs again to make sure that it updates okay. One potentially flaky spot is that we allow as input both a character string containing the name of the object and the name itself. We want to make sure that the same behavior occurs when the input changes between these two forms. Still along this line we should look at what happens when the object that we want to put under SCCS control is character, and specifically that a character vector of length 1 can be properly put under control. Another potential trouble spot is when the name of the object is weird and we need to use the xname argument.
+
+We may consider testing sccs thoroughly. To do this, we would want to test it on objects with and without troublesome names that were functions and non-functions, possibly with character data as a special case. We would want to test it with new being both TRUE and FALSE, and with already.out both TRUE and FALSE. So a simple, little function that doesn’t do very much is going to require on the order of 10 test cases to cover all possibilities. This should give you some appreciation for the difficulty of testing a large piece of software.
+
+verify is a generic function with two methods. The default method expects a vector of character strings, where each string is an S command. The default method returns an object of class "verify". The other method of verify is for objects of class verify and it compares the current answers to the original answers to see if they have changed (significantly).
+
+To start, give verify a character vector containing the commands that you want to test. In the test below, we give verify two arguments — the first is a character vector of commands, and the second is a list of the objects to be used in the commands. Both objects given as arguments have names. Names are optional for the commands — but convenient when there are a large number of commands in the test. It is mandatory to have names for the second argument.
+
+> jjverif <- verify(c(sin = "sin(x)", ran = "runif(9)"), list(x = 1:4))
+> jjverif
+Passed:
+sin ran NA NA
+Commands:
+      sin        ran
+ "sin(x)" "runif(9)"
+Names of data: x
+Specifics:
+version: Version 3.1 Release 1 for Sun SPARC, SunOS 4.x : 1992
+Machine: revery
+Date: Fri Dec 10 12:07:37 EST 1830
+
+The answers from each test are available as input to subsequent tests by the name of Test. plus the name of the test or its index number:
+
+> jjverif2 <- verify(c(sin = "sin(x)", ran = "runif(9)",
++      more="outer(Test.sin, Test.ran)"), list(x = 1:4))
+> jjverif2
+Passed:
+ sin ran more
+  NA  NA   NA
+Commands:
+      sin        ran                  more
+ "sin(x)" "runif(9)" "outer(Test.sin, Test.ran)"
+Names of data: x
+Specifics:
+version: Version 3.1 Release 1 for Sun SPARC, SunOS 4.x : 1992
+Machine: julia
+Date: Sat Aug 24 12:08:37 GMT 1591
+
+Once you have this original test object, you can use it as an argument to verify in whatever new environment you like. The result of the new call to verify will tell you if any of the answers are different, and if so, then how. At some point, it may be that you decide that the old tests were wrong and that the new one is giving the correct answers.
+
+> verify(jjverif)
+Passed:
+sin ran TT
+Commands:
+      sin        ran
+ "sin(x)" "runif(9)"
+Names of data: x
+Specifics:
+version: Version 3.3 Release 1 for Silicon Graphics Iris,
+ IRIX 5.2 : 1995
+Machine: azcan
+Date: Thu Oct 2 12:14:09 EST 1879
+
+The commands that are in your test suite should each cover as much functionality as possible — just as a line of good poetry packs the maximum amount of meaning. For example, testing transcribe is also a test of perl because transcribe calls perl. The suite as a whole should test all of the significant functionality, and anything that seems prone to being wrong.
+
+There is the task of creating the initial vector of character strings of commands. I’ll give the method I’ve used to do this. Create a clean directory with nothing in the .Data. Write a file containing the commands that you want to test, with each one assigned to Test.something. Objects that are to be passed into verify — like variousnum in my example — are assigned in this clean directory.
+
+> !head poet.verif.q
+Test.transcribe _ transcribe("state.name",".","_")
+Test.loan _ loan(2000, .08, 2, 1997)
+Test.update.loan _ update(Test.loan, rep(100,5))
+Test.numbase _ numberbase(-9:9,2,10)
+Test.ratnum _ rationalnum(variousnum, rep(variousnum, rep(16, 16)))
+Test.ratnum.op _ Test.ratnum - 2 * Test.ratnum
+Test.pg1 _ polygamma(1:10, "trig")
+> source("poet.verif.q")
+
+As you write this file, you can use source to evaluate the file of statements. At this stage you have the opportunity to see if the results are as they should be.
+
+Once you are pleased, you need to make the character vector to feed to verify. Make a copy of the file so that you retain the original (to make additions), and edit the copy by taking out the assignments. Using an underscore makes it easy to do the editing as long as any assignments within the test proper are not underscores. You can use another copy of the file to get the names to give to the commands.
+
+> !cp poet.verif.q poet.verif.grab
+> # edit poet.verif.grab
+> q()
+
+Now, go to the home of the code so that the verification object will live in the same directory.
+
+> jjpv <- scan("../spo.test/poet.verif.grab", what = "", sep = "\n")
+> names(jjpv) <- jjvn
+> poet.verif <- verify(jjpv, list(variousnum = get("variousnum",
++    where = "../spo.test/.Data")))
+
+Scan the commands into S so that each command is a separate element of the resulting character vector. You can then try this out on verify to see how it goes. It will, of course, work seamlessly.
+
+> print(poet.verif, short=T)
+Passed:
+ transcribe loan update.loan numbase ratnum ratnum.op
+         NA   NA          NA      NA     NA        NA
+ pg1 pg2 pg3 digam1 digam2 digam3 digam4 digam5
+  NA  NA  NA     NA     NA     NA     NA     NA
+ expint1 expint2 mathgra getpath line.int lagrange
+      NA      NA      NA      NA       NA       NA
+ global.var sym.addr symsqrt stack.init stack.pop
+         NA       NA      NA         NA        NA
+ que.init que.pop quad.form twice.2
+       NA      NA        NA      NA
+Names of data: variousnum
+Specifics:
+version: Version 3.1 Release 1 for Sun SPARC, SunOS 4.x : 1992
+Machine: plum
+Date: Mon Sep 17 08:37:51 EST 1883
+
+So now poet.verif is the verification object that users of the code can use at their whim with a command like:
+
+> print(verify(poet.verif), short=T)
+
+DANGER. This really was done under S-PLUS version 3.1, but the test will system terminate using the usual verify.default. I added a cat statement in the loop, and it ran fine. This bug was fixed (I believe) in 3.2. Symptoms are that strange things happen in a loop, and changing something like putting in calls to cat make it disappear or change.
+
+There is also subscripting of verify objects so that you can run only part of a test. For example, if you do not have an ANSI C compiler, you can do:
+
+verify(poet.verif[-28])
+
+to remove the one test that demands this.
+
+Below is the listing for verify.verify, the verify method for objects of class "verify". The default method is similar, though it has an extra argument for data.
+
+verify.verify <- function(x) {
+    commands <- attr(x, "commands")
+    random.seed <- attr(x, "random.seed")
+    if(length(random.seed)) {
+        old.seed <- .Random.seed
+        on.exit(.Random.seed <<- old.seed)
+        .Random.seed <<- random.seed
+    }
+    n <- length(x)
+    data <- attr(x, "data")
+    passed <- ans <- vector("list", n)
+    tnam <- xnam <- names(x)
+    if(!length(tnam))
+        tnam <- 1:n
+    for(i in 1:n) {
+        if(length(data)) {
+            ans[[i]] <- eval(parse(text = commands[i]), data)
+        } else {
+            ans[[i]] <- eval(parse(text = commands[i]))
+        }
+        passed[[i]] <- all.equal(x[[i]], ans[[i]])
+        data[[paste("Test", tnam[i], sep = ".")]] <- ans[[i]]
+    }
+    if(all(unlist(lapply(passed, mode)) == "logical"))
+        passed <- unlist(passed)
+    names(passed) <- xnam
+    length(data) <- length(data) - n
+    specifics <- list(version = if(exists("version")) version else NULL, 
+                      machine = unix("hostname"), 
+                      date = date())
+    attributes(ans) <- list(names = xnam, 
+                            data = data, 
+                            commands = commands, 
+                            passed = passed, 
+                            random.seed = random.seed,
+                            specifics = specifics, 
+                            class = "verify")
+    ans
+}
+
+Mainly this function loops over the commands in the test suite, evaluates them, adds each result to the list of available variables, and compares the current results to the old results. An important feature is that it takes care of getting the random seed right if the test involves any functions that use the S random generator.
+
+3.7 Time Monitoring
+
+There is one operation in S that is essentially instantaneous — assignment. The object is already there, so assignment merely adds the pointer for the name. So, in general, if an object is used twice or more in a function, it will be faster (and probably more memory efficient) to name the object.
+
+A simple tool in S to monitor the time used by function calls is unix.time. Just give the command you want to time as the argument to unix.time. unix.time returns five numbers — the first two are different kinds of computer time and the last two are computer times for subprocesses; the third number is the elapsed (wall) time rounded to the nearest second. The last two numbers are zero for almost all commands. I have a personal function that reports the total computer time and the elapsed time — I find that more useful. When I do count the clock 12
+
+> unix.time(rationalnum(1:10, 3))
+[1] 0.04000092 0.00000000 0.00000000 0.00000000 0.00000000
+> unix.time(for(i in 1:100) rationalnum(1:10, 3))
+[1] 3.7300014 0.1600001 9.0000000 0.0000000 0.0000000
+> unix.time(for(i in 1:100) rationalnum(1:10, 3))
+[1] 3.7200012 0.1499999 8.0000000 0.0000000 0.0000000
+> unix.time(for(i in 1:100) rationalnum(1:10, 3))
+[1] 3.7000008 0.1800001 8.0000000 0.0000000 0.0000000
+
+In the first call the total time is just a fraction of a second. In order to get timing that is at all accurate, you need times that are several seconds. The usual trick is to use a for loop to call the command some number of times. The last three commands are all the same, and have similar timing, so we seem to be getting accurate timing (though 4 seconds is a little slim still). You might notice that the elapsed time is a lot more than the computer time. In this case it is because there are other users on the machine. Sometimes the elapsed time is greater even when the machine is doing nothing else. This implies that your command uses a significant amount of time that is not being accounted for, such as disk access time.
+
+The interlude function monitors the number of calls to and the execution time of selected functions. This is useful to see where the time goes in long calculations. This is often called “profiling”, but that name is already taken in S. The function is rather involved, so a discussion of the code for it is deferred until page 220.
+
+This can be used either to see how much time particular functions take, or how many times they are called. The purpose in the first case is often to see where the computation time is going with the view of speeding things up. Sometimes you have very little idea of how often various functions get called. It is feasible to think that there are cases where knowing the number of calls to some function can suggest a more efficient algorithm.
+
+I used interlude to striking advantage in one case. A function given a 2- dimensional problem ran in a few minutes, but it took eighteen hours to complete on a 30-dimensional problem when my calculations based on the 2-dimensional case showed that it should only take a couple hours. I immediately thought of paging as the reason, but an examination of the process showed that memory use was not excessive and paging was not the cause. Then I put interlude on the case, and it showed that rank was the source of the problem (there were lots of calls to it). I wrote a rank.fast function that ignored missing values (there were none in my application) and ties (which were rare and unimportant). The 30-dimensional problem then ran in about 30 minutes.
+
+There are poor uses of this function as well as good ones — the “Code Tuning” chapter of Bentley (1986) discusses the issue from the point of view of a language like C. He points out that it is important to get the big picture right before mucking around in the details.
+
+To use interlude, give it a vector of character strings naming the functions that you want to monitor. For instance:
+
+> interlude(c("qr", "c", "rep", "seq"))
+Warning messages:
+1: assigning "qr" on database 0 masks an object of the
+        same name on database 5
+2: assigning "c" on database 0 masks an object of the
+        same name on database 7
+3: assigning "rep" on database 0 masks an object of
+        the same name on database 5
+4: assigning "seq" on database 0 masks an object of
+        the same name on database 7
+> jj <- lm(formula = freeny.y ~ freeny.x)
+
+Execute as many commands as you like, and when you want to see the results, type:
+
+> summary.interlude()
+    total.time number.calls  mean.time
+ qr 0.00000000            0         NA
+  c 0.01666665            9 0.00185185
+rep 0.00000000            0         NA
+seq 0.08333325            1 0.08333325
+
+Use summary.interlude whenever you like. You can remove some or all of the functions from being monitored with uninterlude. The default is to remove all the functions.
+
+DANGER. interlude creates temporary versions of the functions that will last no longer than the present session. The trace function uses this same mechanism — it will not work to use both trace and interlude on a function at the same time.
+
+For accurate timing, you should avoid monitoring functions that are used by other functions being monitored.
+
+DANGER. You do not want to edit functions that are under interlude since you will get the interlude changes mixed into your copy of the function. It makes a mess.
+
+3.8 Memory Monitoring
+
+The amount of memory that an S function takes to run is generally the most important measure of its efficiency. It is also hard to understand. The amount of memory a function uses depends — sometimes heavily — on the state of memory at the time that the function is called. Seemingly trivial changes to a function can sometimes have dramatic effects on memory usage.
+
+If you have a specific task that you are only doing once and you are running out of memory, then there are a few things that you can do. The first thing to try is to get out of S and start a fresh session — the command may work since the new S session is using less memory. If this doesn’t work, then see if you can break the task into pieces that can be performed individually. For example, suppose that you are doing a linear regression
+
+> ans <- lm(huge.y ~ huge.x1 + huge.x2)
+
+and you are running out of memory. The lm function does quite a lot of data manipulation before it gets to the actual computation of the regression. We can do the data manipulation by hand, and then call the computational function directly:
+
+> huge.xmat <- cbind("(Intercept)"=1, huge.x1, huge.x2)
+> ans.alt <- lm.fit.qr(huge.xmat, huge.y)
+
+The ans.alt object is without a few of the flourishes that ans has, but probably has all you need. For large objects the alternative method will use substantially less memory.
+
+The remainder of this section presumes that you have a programming task that will be done repeatedly, and you want it to be memory efficient. It is the maximum memory that a function uses during the call that is important — it doesn’t matter if that usage is throughout the entire function or just at one line of it.
+
+DANGER. There is one idiom that is guaranteed to waste memory. Here is an example:
+
+# AVOID THIS
+ans <- NULL
+for(i in 1:n) {
+    ans <- c(ans, sum(n:i))
+}
+
+If you are worrying that this won’t work because on the first iteration we are concatenating NULL with something, that is not a problem — it works fine. The problem is that this code fragments memory. Before the for loop, ans takes up a certain number of bytes (the size of the S header). On each pass through the loop, ans grows in size so it generally needs to move from where it has been living to a new location. This frees up the space it was using, but many objects will be too large for the hole so there will be numerous small holes in the memory which means that more total memory has to be used.
+
+The example above can be written much more efficiently:
+
+# better
+ans <- numeric(n)
+for(i in 1:n) {
+    ans[i] <- sum(n:i)
+}
+
+Of course, in this example the truly best way would be to figure out the formula, and avoid the loop altogether.
+
+When you don’t know what the final length of the answer will be, then the second version will not work. If this is the case and the loop is not long, then I just use the adding-on technique. But if the loop is long and you are working with large objects, you will want to find an alternative.
+
+There are less callous ways of fragmenting memory. Function fjjloop provides a simple example of a type of operation that is common in some of my work.
+
+fjjloop <- function(x, backwards = F) {
+    nobs <- dim(x)[1]
+    ans <- numeric(nobs)
+    iseq <- 2:nobs
+    if(backwards)
+        iseq <- rev(iseq)
+    for(i in iseq) {
+        this.x <- x[1:i,  ]
+        this.v <- var(this.x)
+        ans[i] <- sum(this.v)
+    }
+    fjjcomma(memory.size())
+}
+
+The fjjcomma function is just a call to the S-PLUS format function so that
+commas are placed in numbers. (It needs S-PLUS version 3.2 or later.)
+
+The key characteristic is that the data changes size throughout the course of the loop. It is also of importance that the order in which the iterations are performed can be changed. When the backwards argument is FALSE, then the data grows in size throughout the loop, and they shrink in size when backwards is TRUE. To test the memory use in these two cases, we issue each command as the first in a session of S.
+
+> # in fresh session
+> fjjloop(jjbig)
+[1] "4,209,384"
+> # in fresh session
+> fjjloop(jjbig, back=T)
+[1] "1,997,544"
+
+Clearly the backwards order uses substantially less memory. (jjbig is 100 by 100 in this example, by the way.) The reason that backwards is superior is that on each iteration the new this.x can fit where the old one was, while fresh memory needs to be used when this.x is growing in size.
+
+There are two main reasons for memory growth in S — garbage and copies. Garbage is created in loops as objects are continually created and destroyed. S has a garbage compactor that recovers most of the memory, but some garbage remains. Often the main expenditure of memory is because there are numerous copies of objects. S functions guarantee that they will not change the objects that were passed in as arguments (unless the programmer specifically programs that to happen), so each function tends to make its own copy of its arguments. One of the main things to do in managing memory is to try to reduce the number of copies of objects that are likely to be large.
+
+The primary diagnostic for memory use is statements like
+
+cat("at location 2, memory is", memory.size(), "\n")
+
+that are scattered through the code. To use these reliably, each time you call the function you need to have just started the S session (possibly followed by a specific set of commands). You also need to use objects that are large enough (maybe on the order of a megabyte) so that you can see how many copies are being created.
+
+Suppose that we have two matrices A and B where A is symmetric and we want to get the larger matrix that is partitioned as:
+
+A  AB′ 
+BA BAB′
+
+If these matrices are large, then memory may be of concern. Let’s look at some possible definitions of functions to do this and how they use memory. The first attempt is compact and simple to understand:
+
+fjjaugsym1 <- function(a, b) {
+    part <- rbind(a, b %*% a)
+    cbind(part, part %*% t(b))
+}
+
+Here are the objects to test the function with.
+
+> dim(jja)
+[1] 200 200
+> dim(jjb)
+[1] 100 200
+> fjjcomma(object.size(jja))
+[1] "320,124"
+> fjjcomma(object.size(jjb))
+[1] "160,124"
+
+When testing memory use, it is useful to create objects at least this large so that significant changes in memory will be easily visible.
+
+# New S Session
+> jj <- fjjaugsym1(jja, jjb)
+> fjjcomma(memory.size(T))
+[1] "4,961,400"
+> fjjcomma(object.size(jj))
+[1] "720,124"
+
+Let’s do some accounting now. Inputs total about half a megabyte and there was about a half of a megabyte used before we got the first S prompt. So about 2 megabytes are accounted for, leaving about 3 megabytes as “wasted”. If your function does anything at all, then there is going to be memory used in addition to the inputs and output—the aim is to keep the amount small.
+
+The second attempt is significantly longer, but the logic is still simple. The idea is to create a matrix that is the size of the result, and then do replacements.
+
+fjjaugsym2 <- function(a, b) {
+    da <- dim(a)
+    db <- dim(b)
+    newsize <- sum(db)
+    ans <- array(NA, c(newsize, newsize))
+    oseq <- 1:da[1]
+    nseq <- 1:db[1] + da[1]
+    ans[oseq, oseq] <- a
+    part <- b %*% a
+    ans[nseq, oseq] <- part
+    part <- t(part)
+    ans[oseq, nseq] <- part
+    ans[nseq, nseq] <- b %*% part
+    dna <- dimnames(a)[[1]]
+    if(!length(dna))
+        dna <- rep("", da[1])
+    dnb <- dimnames(b)[[1]]
+    if(!length(dnb))
+        dnb <- rep("", db[1])
+    newdn <- c(dna, dnb)
+    if(sum(nchar(newdn)))
+        dimnames(ans) <- list(newdn, newdn)
+    ans
+}
+
+The first thing to do is check to make sure that it does the same thing as the previous version:
+
+> all.equal(fjjaugsym2(var(freeny.x), matrix(1:8,2)),
++           fjjaugsym1(var(freeny.x), matrix(1:8,2)))
+[1] T
+
+Now test the memory use with our large objects:
+
+# New S Session
+> jj <- fjjaugsym2(jja, jjb)
+> fjjcomma(memory.size(T))
+[1] "3,470,456"
+
+So this saves 1.5 megabytes over fjjaugsym1. A logical improvement to this latest version is to change the NA in the call to array to as.double(NA). This way ans will be initialized to be its final size instead of half as big. However in this test, it actually uses more memory — I don’t understand why.
+
+Some of the lines in the function can be permuted which may have consequences for memory use. Obviously the same amount is going to be written to memory — the issue is how efficiently memory is recycled. I didn’t try very hard, but I didn’t find a better order than the one given.
+
+While memory isn’t cleaned up well within a function, all of the memory is released (except that used by the result) when the function exits. This can be used to advantage at times in managing memory by putting some calculations into a subfunction. There’s a catch — the memory you save must more than com- pensate for any extra copies that you create when you increase the depth of the function calls. Encapsulating most of the contents of a loop into a subfunction often helps relieve memory growth.
+
+Loops in S return a value, though this value is seldom used. At times memory use can be reduced by making the return value of a loop be something small (like NULL) rather than the large object that happens to be the value. Version 4.0 of S-PLUS eliminates the return value of loops.
+
+Below I show the results of an attempt (slightly unsuccessful) at reducing memory use of a test function. The subfunction principle and the NULL value for the loop were tried separately and together. Here are the function definitions:
+
+fjjmem1 <- function(iter = 10, n = 100) {
+    ans <- vector("list", iter)
+    for(i in 1:iter) {
+        cat("i is", i, "memory.size is", memory.size(), "\n")
+        x <- outer(rep(1, n), rep(5, n))
+        ans[[i]] <- x %*% x
+    } 
+    NULL
+}
+
+fjjmem2 <- function(iter = 10, n = 100) {
+    ans <- vector("list", iter)
+    for(i in 1:iter) {
+        cat("i is", i, "memory.size is", memory.size(), "\n")
+        x <- outer(rep(1, n), rep(5, n))
+        ans[[i]] <- x %*% x
+    }
+    NULL
+}
+
+fjjmem3 <- function(iter = 10, n = 100) {
+    subfun <- function(n) {
+        x <- outer(rep(1, n), rep(5, n))
+        x %*% x
+    }
+    ans <- vector("list", iter)
+    for(i in 1:iter) {
+        cat("i is", i, "memory.size is", memory.size(), "\n")
+        ans[[i]] <- subfun(n)
+    } 
+    NULL
+}
+
+fjjmem4 <- function(iter = 10, n = 100) {
+    subfun <- function(n) {
+        x <- outer(rep(1, n), rep(5, n))
+        x %*% x
+    }
+    ans <- vector("list", iter)
+    for(i in 1:iter) {
+        cat("i is", i, "memory.size is", memory.size(), "\n")
+        ans[[i]] <- subfun(n)
+        NULL
+    } 
+    NULL
+}
+
+Here are the results using S-PLUS version 3.3 on a Silicon Graphics. Function fjjmem1 performed the same as fjjmem2:
+
+# new S session
+> fjjmem2(n = 300)
+i is 1 memory.size is 544584
+i is 2 memory.size is 6381384
+i is 3 memory.size is 7823176
+i is 4 memory.size is 7823176
+i is 5 memory.size is 9264968
+i is 6 memory.size is 10706760
+i is 7 memory.size is 12148552
+i is 8 memory.size is 12148552
+i is 9 memory.size is 13590344
+i is 10 memory.size is 13590344
+
+# new S session
+> fjjmem3(n = 300) # subfun
+i is 1 memory.size is 544584
+i is 2 memory.size is 6401864
+i is 3 memory.size is 7843656
+i is 4 memory.size is 7843656
+i is 5 memory.size is 8564552
+i is 6 memory.size is 9285448
+i is 7 memory.size is 10006344
+i is 8 memory.size is 10727240
+i is 9 memory.size is 11448136
+i is 10 memory.size is 12169032
+
+# new S session
+> fjjmem4(n = 300) # subfun and NULL return
+i is 1 memory.size is 544584
+i is 2 memory.size is 6401864
+i is 3 memory.size is 7843656
+i is 4 memory.size is 8564552
+i is 5 memory.size is 9285448
+i is 6 memory.size is 10006344
+i is 7 memory.size is 10727240
+i is 8 memory.size is 11448136
+i is 9 memory.size is 12169032
+i is 10 memory.size is 12889928
+
+The subfunction saved a minor amount of memory. Notice that putting the NULL at the end of the for loop, which is supposed to reduce memory use, actually increased it when the subfunction is used. This is part of the frustration. There were no differences in memory among these four functions using S-PLUS version 3.1 on a Sparc (the memory use there was slightly higher than here).
+
+3.9 Things to Do
+
+Decide what naming convention for S objects makes the most sense for you, and rename your objects to fit it.
+
+Decide how your S objects should be divided, and do it.
+
+Put your important files and S objects under source code control, and create
+verify objects for your important S functions.
+
+Write a version of soptions that guarantees there will be a warning message
+printed when a new option is added. Which functionality is better? 
+
+Test the memory and time use of some of your functions.
+3.10 Further Reading
+
+The literature on software testing is wide and varied, and contains no magic bullets that I know of. One interesting little book is Davis (1995) 201 Principles of Software Development.
+
+3.11 Quotations
+
+[10] Percy Bysshe Shelley “Ozymandias”
+[11] A. E. Housman “Terrence, This is Stupid Stuff...” 
+[12] William Shakespeare (Sonnet 12)

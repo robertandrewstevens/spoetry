@@ -1,0 +1,1419 @@
+S POETRY
+by Patrick J. Burns
+
+Chapter 10: Numbers
+
+10.1 Changing Base
+10.2 Rational Numbers
+10.3 Polygamma
+10.4 Digamma
+10.5 Continued Fractions
+10.6 Things to Do
+10.7 Further Reading
+10.8 Quotations
+
+
+Here are some examples, mostly half-baked, of numerical computations.
+10.1 Changing Base
+It is not unusual to want to view numbers in a base other than base 10—or in more technical terms—to change radix. Binary, octal and hexadecimal are particularly common bases to use.
+We’ll look at an implementation of this called numberbase. Note that this function is limited to integers. Here it is in action:
+> jj <- numberbase(1:20)
+> jj
+[1]1 2 3 4 5 6 [18] 18 19 20
+(base 10)
+> numberbase(jj, 2)
+[17] 10001 10010 10011 10100
+(base 2)
+> numberbase(jj, 8)
+[1]1 2 3 4 5 6 7 10111213141516172021 [18] 22 23 24
+(base 8)
+> numberbase(jj, 16)
+ [1] 1  2  3  4  5  6  7  8  9  a  b  c  d  e  f  10 11
+[18] 12 13 14
+(base 16)
+> numberbase(c("10011101", "1101010001"), 10, old=2)
+235
+7 8 9 1011121314151617
+                      100   101   110   111   1000
+[9] 1001  1010  1011  1100  1101  1110  1111  10000
+[1] 1 10 11
+236 CHAPTER 10. NUMBERS [1] 157 849
+(base 10)
+The numberbase function itself is a typical generic function:
+"numberbase"<-
+function(x, ...)
+UseMethod("numberbase")
+It has two methods written for it—a default method and the rather perverse idea of a method for objects of the class that it creates:
+"numberbase.default"<-
+function(x, newbase = 10, oldbase = 10)
+{
+        ans <- to.base10(x, oldbase)
+        if(newbase != 10)
+                ans <- numberbase(ans, newbase)
+ans }
+"numberbase.numberbase"<-
+function(x, newbase = 10)
+{
+        from.base10(attr(x, "value"), newbase)
+}
+These are nice and simple, but only because they have a couple of slaves that do all of the work. The default method doubly cheats by calling the generic function again. Dividing the computations like this clarifies the scheme slightly—the function names crystalize the abstractions.
+Once we look into these lower-level functions, we see how the system works.
+"to.base10"<-
+function(raw, oldbase)
+{
+        to.base10.sub <- function(raw, mult, digested)
+        {
+                ncr <- nchar(raw)
+                this.raw <- substring(raw, ncr, ncr)
+                this.raw <- match(this.raw, c(0:9,
+                        letters, "-")) - 1
+                digested <- ifelse(this.raw == 36,  -
+                        digested, digested + this.raw *
+                        mult)
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+10.1. CHANGING BASE 237 list(raw = substring(raw, 1, ncr - 1),
+}
+                digested = digested)
+}
+# start of main function
+if(is.numeric(raw)) {
+        if(any(abs(round(raw) - raw) >
+                .Machine$double.eps)) {
+                warning("rounding non-integers")
+        raw <- as.character(round(raw))
+}
+else if(!is.character(raw))
+        stop(paste("can not handle data of mode",
+                mode(raw)))
+raw <- transcribe(raw, "A-Z", "a-z")
+multiple <- 1
+todo <- nchar(raw) > 0
+digested <- rep(0, length(raw))
+while(any(todo)) {
+        current <- to.base10.sub(raw = raw[
+                todo], mult = multiple,
+                digested = digested[todo])
+        multiple <- multiple * oldbase
+        digested[todo] <- current$digested
+        raw[todo] <- current$raw
+        todo <- nchar(raw) > 0
+}
+ans <- as.character(digested)
+attr(ans, "value") <- digested
+attr(ans, "base") <- 10
+class(ans) <- "numberbase"
+ans
+}
+The first step is to convert numbers to character strings. Then the characters are converted to their numeric value starting with the one’s place and moving to the higher value places. Elements that have the largest number of characters in their representation control the length of the while loop. Finally, ans is made into an object of class "numberbase". The subfunction (called to.base10.sub) takes care of doing the messy details of the work within the loop. (We should worry for an instant what happens in the call to substring when ncr is 1, but it works okay.)
+The structure of a numberbase object is that it is a vector of the character representation in the base of interest, and it has an attribute called "base" that states the base of the representation, and it has a "value" attribute that contains the numeric value.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+238 CHAPTER 10. NUMBERS
+from.base10 could have been written with precisely the same structure as to.base10, but it is written in a different style to display features of the language. Again, let me emphasize that you should use one style throughout a project—we can expect three times as much debugging of to.base10 and from.base10 than if we had stuck to one style.
+The subfunction in from.base10 uses recursion, rather than being called from a loop as is the subfunction in to.base10.
+"from.base10"<-
+function(raw, newbase)
+{
+        from.base10.sub <- function(raw, newbase)
+        {
+                zero <- raw == 0
+                if(all(zero))
+                        return(character(0))
+                ans <- character(length(raw))
+                this.digit <- raw[!zero] %% newbase
+                if(newbase > 10)
+                        this.digit <- c(0:9, letters)[
+                                this.digit + 1]
+                ans[!zero] <- paste(Recall(raw[!zero] %/%
+                        newbase, newbase), this.digit,
+sep = "")
+ans }
+        # start of main function
+        if(length(newbase) != 1 || newbase > 36.5 ||
+                newbase < 1.5 || abs(round(newbase) -
+                newbase) > .Machine$double.eps)
+                stop("need single integer between 2 and 36 as base"
+                        )
+        raw <- as.numeric(raw)
+        wna <- which.na(raw)
+        if(length(wna)) {
+                realraw <- raw
+                raw <- raw[ - wna]
+        }
+        if(any(abs(round(raw) - raw) > .Machine$
+                double.eps))
+                warning("rounding non-integers")
+        raw <- round(raw)
+        ans <- from.base10.sub(abs(raw), round(newbase))
+        ans[nchar(ans) == 0] <- "0"
+        ans[raw < 0] <- paste("-", ans[raw < 0], sep
+= "")
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+10.1. CHANGING BASE 239
+}
+if(length(wna)) {
+        realans <- character(length(realraw))
+        realans[wna] <- "NA"
+        realans[ - wna] <- ans
+        ans <- realans
+        raw <- realraw
+}
+attr(ans, "value") <- raw
+attr(ans, "base") <- newbase
+class(ans) <- "numberbase"
+ans
+Except for some messing about with missing values, the main actions are the same in this function as in to.base10 except there is no loop.
+from.base10.sub calls itself recursively through the Recall function. As in all recursive functions, the first thing done in from.base10.sub is to return if the condition is met that means it is at the bottom of the recursion. It then does some work, and calls itself on the portion that still needs further work. If you are confused about how this works, you can put a call to browser just before the call to paste in order to investigate.
+S functions may call themselves recursively by using their own name or by using Recall. There are two reasons to use Recall. If you change the function name, then you do not need to change the definition of the function if you use Recall—you do if you hard-code the name in the definition. The second reason is that Recall ensures that the function will be found. Since from.base10.sub is defined within another function, it wouldn’t work if it called itself recursively by name since the new call wouldn’t search the frame where the function is defined. (Page 210 tells the rules for object searching.)
+Many problems have a very natural recursive solution that is easy for us to comprehend. Unfortunately, recursion does not tend to be natural in computer languages. If the recursion is guaranteed not to go too deep, then using recursion is good—the code is likely to be simple and easy to understand, and resources won’t be strained. If the recursion is deep, then the code will be inefficient, and may break on larger problems. A recursive algorithm can always be converted to an iterative one.
+The second example below illustrates what happens when recursion goes too deep in S:
+> numberbase(.Machine$integer.max, 16)
+[1] 7fffffff
+(base 16)
+> numberbase(.Machine$integer.max, 2)
+Error: Expressions nested beyond limit (256) --
+        increase limit with options(expressions=...)
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+240
+CHAPTER 10. NUMBERS
+only 27 of 83 frames dumped
+Dumped
+> options(expressions=350)
+> numberbase(.Machine$integer.max, 2)
+[1] 1111111111111111111111111111111
+(base 2)
+The expressions option is a safety valve to keep unintentional recursion from creating an infinite loop. Since integer.max is the worst case, there is no reason to give up the recursive algorithm, though we may want to change the expressions option within the function. However, if we upgrade the function- ality to include floating point numbers, we should worry about the recursion.
+Here is the print method for numberbase objects.
+"print.numberbase"<-
+function(x, ...)
+{
+}
+xv <- as.vector(x)
+names(xv) <- names(x)
+print(xv, quote = F)
+cat(paste("(base ", attr(x, "base"), ")\n",
+        sep = ""))
+invisible(x)
+The most important aspects are that it follows the convention that it returns its argument invisibly, and that that argument is named x (see page 92). Quoting of the character strings is turned off so that the result will look like numbers and not character strings. Of course, indicating the base is a requirement. Additional arguments are allowed to come in even though they are not used.
+The above functions seem to work reasonably well. However, informal testing uncovered the following behavior:
+> numberbase(c(NA,"10011101", "1101010001"), 10, old=2)
+[1] 56  157 849
+(base 10)
+This is an example of a test of “garbage” inputs (page 53)—the input is not precisely what was expected, but it is well within the realm of reason. It’s decidedly impolite for missing values to transform themselves into normal look- ing data, so we need to fix this. A new definition for to.base10.sub makes it better:
+        to.base10.sub <- function(raw, mult, digested,
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+10.1. CHANGING BASE 241 oldbase)
+{
+}
+ncr <- nchar(raw)
+this.raw <- substring(raw, ncr, ncr)
+this.raw <- match(this.raw, c(0:9,
+        letters, "-")) - 1
+digested <- ifelse(this.raw == 36,  -
+        digested, digested + this.raw *
+        mult)
+bad <- this.raw >= oldbase & this.raw <
+        36
+digested[bad] <- NA
+list(raw = substring(raw, 1, ncr - 1),
+        digested = digested)
+One check on whether numberbase works or not, is to go to a base and then use the characters for that base to go back to the original base and see if anything is different.
+"fjjchecknumberbase"<-
+function(x, ...)
+{
+        xnb <- numberbase(x, ...)
+        xbase <- attr(xnb, "base")
+        xnb <- as.vector(xnb)
+        for(i in 2:36) {
+} }
+this.nb <- numberbase(xnb, new = i,
+        old = xbase)
+this.back <- numberbase(as.vector(
+        this.nb), new = xbase, old = i)
+if(any(this.back != xnb))
+        stop(paste(
+                "bad conversion between bases",
+                xbase, "and", i))
+else cat("bases", xbase, "and", i,
+"okay\n")
+We can test every combination of bases with a loop like:
+> for(i in 2:36) fjjchecknumberbase(-1000:1000, new=i)
+bases 2 and 2 okay
+bases 2 and 3 okay
+bases 2 and 4 okay
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+242
+CHAPTER 10. NUMBERS
+...
+We don’t know if it always works, but we at least know that it works on the numbers that we gave it. Given that it works for these, it is only extreme cases where trouble is likely to be.
+As long as the input is numeric, we are (rather accidentally) protected from special values causing problems because an error results if we include any:
+> numberbase(c(-10:10, NA, Inf))
+Error in to.base10: Missing value where logical needed:
+if(any(abs(round(raw) - raw) > .Machine$double.eps))
+... Dumped
+In summary, we can have reasonable faith that numberbase performs cor- rectly, though it would be a nicety to have special values work.
+10.2 Rational Numbers
+I was disillusioned once my first computer program (in Fortran) gave me an answer. It was a program to do the quadratic equation, and it produced answers like 1.999998 and 5.999999. I knew very well that the correct answers were 2 and 6, so I couldn’t see why a big, fancy computer couldn’t know it also. The reason, of course, is that computations are typically done with floating point numbers of finite length so that small numerical errors usually occur with each operation. S hides this better than that Fortran program did because S typically computes in double precision and prints in single precision, but the problem persists.
+If you want precise computations with non-integer numbers (and your prob- lem is suitable), then you can use rational numbers where the numerator and denominator are each integers. Here we create a class of objects for rational numbers. Do you dance, Minnaloushe, do you dance? 34
+> jjr <- rationalnum(num=1, den=1:9)
+> jjr
+[1] 1   1/2 1/3 1/4 1/5 1/6 1/7 1/8 1/9
+> jjr * 2 - 1 / jjr
+[1] 1     -1    -7/3  -7/2  -23/5 -17/3 -47/7 -31/4
+[9] -79/9
+The primary function that creates rational numbers is:
+"rationalnum"<-
+function(numerator, denominator)
+{
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+10.2. RATIONAL NUMBERS 243
+}
+n <- max(ln <- length(numerator), ld <- length(
+        denominator))
+if(ln != n)
+        numerator <- rep(numerator, length = n
+)
+if(ld != n)
+        denominator <- rep(denominator, length
+                 = n)
+anam <- names(numerator)
+if(!length(anam))
+        anam <- names(denominator)
+ans <- list(numerator = numerator, denominator
+         = denominator, names = anam)
+class(ans) <- "rationalnum"
+reduce.rationalnum(ans)
+There are assignments of the arguments to max. You can put assignments virtually anywhere, but there is a catch—you need to make sure that lazy eval- uation isn’t going to get in the way. If the argument is not used in the call, then it will not be evaluated and hence the assignment not made.
+After the function takes care of some bureaucracy, we see that the "rationalnum" class consists of a list of three components—the vector of numerators, the vector
+of denominators, and a vector of names (which may be NULL). But the soul of
+the function lies elsewhere in reduce.rationalnum:
+"reduce.rationalnum"<-
+function(x)
+{
+        signnz <- function(x)
+        {
+                x <- sign(x)
+                x[x == 0] <- 1
+                x
+        }
+        # start of main function
+        nas <- is.na(x$numerator) | is.na(x$
+                denominator)
+        # take care of Inf before coercing to integer
+        if(any(out <- is.infinite(x$denominator))) {
+                x$denominator[out] <- 1
+                x$denominator[out & is.infinite(x$
+                        numerator)] <- 0
+                x$numerator[out] <- 0
+        }
+        if(any(out <- is.infinite(x$numerator))) {
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+244
+CHAPTER 10.
+        x$numerator[out] <- sign(x$numerator[
+                out]) * signnz(x$denominator[
+                out])
+        x$denominator[out] <- 0
+}
+x$numerator <- as.integer(x$numerator)
+x$denominator <- as.integer(x$denominator)
+fact <- great.common.div(x$numerator,
+        x$denominator)
+x$numerator <- as.integer(x$numerator/fact *
+        signnz(x$denominator))
+x$denominator <- as.integer(abs(x$denominator/
+        fact))
+x$numerator[nas] <- NA
+NUMBERS
+x }
+The purpose of this function is to express each number in the form in which the numerator and denominator have no common factor. This again is mainly taken up with details like handling missing values and infinity. The interesting part is in great.common.div which uses Euclid’s algorithm to compute the greatest common divisor for each numerator-denominator pair.
+"great.common.div"<-
+function(x, y)
+{
+}
+if(length(x) != (n <- length(y)))
+        stop("x and y different lengths")
+out <- !is.finite(x) | !is.finite(y)
+x <- round(x)
+y <- round(y)
+okay <- y != 0
+okay[out] <- F
+ans <- z <- x
+while(any(okay)) {
+        z[okay] <- x[okay] %% y[okay]
+        zz <- z == 0 | is.na(z)
+        ans[zz] <- y[zz]
+        okay <- okay & !zz
+        x[okay] <- y[okay]
+        y[okay] <- z[okay]
+}
+ans <- abs(as.integer(ans))
+ans[out] <- NA
+ans
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+10.2. RATIONAL NUMBERS 245
+This function, like the to.base10 function discussed earlier, uses vectorized op- erations and has a loop that stops when enough computing has been performed on the worst-case element.
+The idea of the algorithm is that the greatest common divisor of u and v is the same as the greatest common divisor of v and u mod v. For instance, if we start with the pair (8, 12), then 8 mod 12 is 8, so we have the pair (12, 8). Next, 12 mod 8 = 4 to get the pair (8, 4). This leads to the pair (4, 0). Because the v is zero, we know we are done and the answer is 4.
+Knuth (1981, p 316) wants the greatest common denominator of 0 with 0 to be 0, and the greatest common denominator of u with 0 to be the absolute value of u.
+> great.common.div(c(-4:4), rep(0,9))
+[1] 4 3 2 1 0 1 2 3 4
+Here is a more typical problem:
+> great.common.div(1:100, rep(12, 100))
+  [1]  1  2  3  4  1  6  1  4  3  2  1 12  1  2  3  4
+[17] 1 6 1 4 3 2 112 1 2 3 4 1 6 1 4 [33] 3 2 1 12 1 2 3 4 1 6 1 4 3 2 1 12 [49] 1 2 3 4 1 6 1 4 3 2 1 12 1 2 3 4 [65] 1 6 1 4 3 2 112 1 2 3 4 1 6 1 4 [81] 3 2 1 12 1 2 3 4 1 6 1 4 3 2 1 12 [97] 1 2 3 4
+The print method for the rational number class is defined as:
+> print.rationalnum
+function(x, ...)
+{
+        out <- paste(x$numerator, "/", x$denominator,
+                sep = "")
+        names(out) <- x$names
+        xna <- is.na(x$numerator) | is.na(x$
+                denominator)
+        d1 <- x$denominator == 1
+        out[d1] <- x$numerator[d1]
+        out[xna] <- "NA"
+        dz <- x$denominator == 0
+        nz <- x$numerator == 0
+        out[!xna & nz & !dz] <- "0"
+        out[!xna & nz & dz] <- "NA"
+        out[!xna & x$numerator < 0 & dz] <- "-Inf"
+        out[!xna & x$numerator > 0 & dz] <- "Inf"
+        print(out, quote = F, ...)
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+246
+}
+CHAPTER 10. NUMBERS
+}
+invisible(x)
+The first line and the last two lines are really what the function is about—paste together a character string of the right thing, print it without quotes and return the original invisibly. All of the rest is details for missing values and such.
+Several functions use as.rationalnum to make sure that an object is of class "rationalnum" when appropriate. Here is the default method for this function:
+"as.rationalnum.default"<-
+function(x)
+{
+if(inherits(x, "rationalnum"))
+        return(x)
+switch(mode(x),
+        numeric = {
+                ans <- x
+                ans[] <- NA
+                good <- !is.na(x)
+                x <- x[good]
+                ints <- x == ceiling(x)
+                if(count <- sum(!ints))
+                        warning(paste(count,
+                          "NA(s) created coercing to rationalnum"
+                          ))
+                ans[good][ints] <- x[ints]
+                rationalnum(ans, 1)
+        }
+        ,
+        stop(paste("can not coerce to rationalnum from mode",
+mode(x))))
+Note that there are no other methods for this function, so we could have made it an ordinary function. However, it is believable that other methods could be desired. We are opening the door to unforeseen uses at the expense of only a couple dozen extra keystrokes. Since we are making it generic, we can eke out a little more efficiency by deleting the first two lines, and creating a method of as.rationalnum for class "rationalnum".
+Coercion to rational numbers is not easy, and in consequence the function doesn’t really do much. If we already have rational numbers, great. Otherwise, we can convert integers, but nothing else.
+Now we come to the arithmetic operators. Here is addition:
+"+.rationalnum"<-
+function(e1, e2)
+{
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+10.2. RATIONAL NUMBERS 247
+}
+if(missing(e2))
+        return(e1)
+e1 <- as.rationalnum(e1)
+e2 <- as.rationalnum(e2)
+# propagate names, let default ops do the details
+num1 <- e1$numerator
+names(num1) <- names(e1)
+den2 <- e2$denominator
+names(den2) <- names(e2)
+rationalnum(num1 * den2 + e2$numerator * e1$
+        denominator, e1$denominator * den2)
+The first thing is to see if this is a unary operator, in which case we don’t need to do anything.
+Next, do what seems to be unnecessary—coerce vectors to be rational num- bers. Why would we be inside a method for rational numbers if we don’t have rational numbers to begin with? Well, there is the perverse way—the method is called directly:
+"+.rationalnum"(1, 4)
+but if a user does that, then they can get what they deserve. The real reason we care is that we will end up in this method if only one of the two arguments has class "rationalnum". We need to make sure that both are of this class before we proceed. To make something more than a toy, we would want the coercion to tend to go the other way—coerce rational to numeric and then proceed (but if the non-rational numbers can be coerced to rational, then we would want to do that). It can be a deep problem of what to do when the two arguments to a binary operator are of different types.
+Then we spend a few lines arranging for the names of the rational numbers to end up in the result. As the comment says, we let the usual operators do all of the work. Finally, we plug what we need into rationalnum which will take care of reducing all of the fractions.
+The minus operator is decidedly unlike the addition operator. This time the unary operator does something, and the binary operator cheats its way out.
+"-.rationalnum"<-
+function(e1, e2)
+{
+        e1 <- as.rationalnum(e1)
+        if(missing(e2)) {
+                e1$numerator <-  - e1$numerator
+                return(e1)
+}
+e1 + ( - e2)
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+248 CHAPTER 10. NUMBERS }
+The multiplication and division operators are very similar to addition, except that they do not allow the possibility of a unary operation.
+Now we delve into the housekeeping functions:
+"names.rationalnum"<-
+function(x)
+x$names
+From this we can see that “names” is confounded. We have the names of the numbers, which is what is contained in the names component that the above function returns; and there are the names of the list that is the implementation of the rational number class.
+> names(jjr)
+ [1] "a" "b" "c" "d" "e" "f" "g" "h" "i" "j" "k" "l"
+[13] "m" "n" "o" "p" "q" "r" "s" "t" "u" "v" "w" "x"
+[25] "y" "z"
+> names(unclass(jjr))
+[1] "numerator"   "denominator" "names"
+We need to keep these two straight.
+The names function has an assignment form, and we can write a method for this also:
+"names<-.rationalnum"<-
+function(x, value)
+{
+        value <- as.character(value)
+        if(length(value) != length(x))
+                stop("bad length for names")
+        x$names <- value
+x }
+This is the typical form of an assignment function. One argument—often named x—that is the object being changed, and a second argument named value which is the value given to the appropriate part of x (the object inside the parentheses to the left of the assignment operator). The return value of the function is x. From what you have seen, you should be upset by this definition—it presupposes that there is a length.rationalnum (which is given below).
+> jjr <- rationalnum(num=1, den=1:26)
+> jjr
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+10.2. RATIONAL NUMBERS 249
+ [1] 1    1/2  1/3  1/4  1/5  1/6  1/7  1/8  1/9  1/10
+[11] 1/11 1/12 1/13 1/14 1/15 1/16 1/17 1/18 1/19 1/20
+[21] 1/21 1/22 1/23 1/24 1/25 1/26
+> jjr2 <- jjr
+> names(jjr) <- names(jjr2) <- letters
+> jjr
+abcdefghijkl 1 1/2 1/3 1/4 1/5 1/6 1/7 1/8 1/9 1/10 1/11 1/12
+mnopqrstuv 1/13 1/14 1/15 1/16 1/17 1/18 1/19 1/20 1/21 1/22
+wxyz 1/23 1/24 1/25 1/26
+As this example shows, S is smart about making the right thing happen. From the definition of names<-.rationalnum it seems that we would be trying to assign the whole of jjr2 to the names of jjr, but that is not the case.
+We would like the length of a rational number object to be the number of numbers represented by the object, as with floating point objects.
+"length.rationalnum"<-
+function(x)
+length(x$numerator)
+An assignment form is also possible:
+"length<-.rationalnum"<-
+function(x, value)
+{
+        length(x$numerator) <- value
+        length(x$denominator) <- value
+        if(length(x$names))
+                length(x$names) <- value
+x }
+DANGER. Changing the meaning of length—and to a lesser extent names— should be undertaken only with sound reason and with some trepidation. If all of the holes aren’t filled, there is room for disaster.
+We need to know which values are missing, so we need a method for the is.na function:
+"is.na.rationalnum"<-
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+￼￼
+250 CHAPTER 10. NUMBERS function(x)
+{
+}
+This in turn needs to know about NaN’s:
+"is.nan.rationalnum"<-
+function(x)
+{
+        ans <- x$numerator == 0 & x$denominator == 0
+        # both infinity should not occur
+        ans[is.na(ans)] <- F
+        names(ans) <- x$names
+ans }
+Subscripting is extremely important functionality—here is a method for that:
+"[.rationalnum"<-
+function(x, i)
+{
+}
+is.na(x$numerator) | is.na(x$denominator) | is.nan(x)
+if(is.character(i))
+        i <- pmatch(i, x$names, dup = T)
+x$numerator <- x$numerator[i]
+x$denominator <- x$denominator[i]
+x$names <- x$names[i]
+x
+Notice that we have to handle character subscripts on our own since the names are not as S expects. The assignment form uses a safer approach by putting the names onto the numerator and denominator, and then depending entirely on the default subscripting behavior:
+"[<-.rationalnum"<-
+function(x, i, value)
+{
+        value <- as.rationalnum(value)
+        den <- x$denominator
+        num <- x$numerator
+        names(den) <- names(num) <- x$names
+        den[i] <- value$denominator
+        num[i] <- value$numerator
+        x$denominator <- den
+        x$numerator <- num
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+10.2. RATIONAL NUMBERS 251
+        x$names <- names(den)
+x }
+We, of course, want to be able to change from rational numbers to numeric vectors. Here’s how:
+"as.numeric.rationalnum"<-
+function(x)
+{
+        ans <- as.vector(x$numerator/x$denominator)
+        names(ans) <- names(x)
+        ans
+}
+A method for c is often quite useful. It presents the problem that it should
+allow an arbitrary number of arguments.
+"c.rationalnum"<-
+function(...)
+{
+        dots <- list(...)
+        num <- den <- nam <- NULL
+        has.names <- F
+        for(i in seq(along = dots)) {
+                this.rat <- as.rationalnum(dots[[i]])
+                num <- c(num, this.rat$numerator)
+                den <- c(den, this.rat$denominator)
+                this.nam <- this.rat$names
+                if(length(this.nam))
+                        has.names <- T
+                else this.nam <- rep("", length(
+                                this.rat))
+                nam <- c(nam, this.nam)
+        }
+        ans <- list(numerator = num, denominator = den
+                )
+        if(has.names)
+                ans$names <- nam
+        class(ans) <- "rationalnum"
+ans }
+This uses the idiom of concatenating within a loop that I claimed earlier you should not use. With some work we could avoid it, but I can’t think of an alternative that is very appetizing. Furthermore it seems extremely rare that
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+252 CHAPTER 10. NUMBERS
+the loop would be very long. The main complication in this function is that some but not all of the arguments may have names. The bother with has.names is to keep the names lined up properly.
+The following statement shows that we can stand to improve as.rationalnum:
+> c(jj3, NA, jj3)
+Error in switch(mode(x),: can not coerce to rationalnum
+        from mode logical
+Dumped
+The provinces of his body revolted 35
+A Math group method for rational numbers is useful:
+"Math.rationalnum"<-
+function(x, ...)
+{
+        warning("coercing rational numbers to numeric")
+        x <- as.numeric(x)
+        NextMethod(.Generic)
+}
+The Math group consists of a number of functions like sin and exp. Most of these are not closed under rational numbers, that is, if a rational number is given as an argument, then the exact answer need not be a rational number. So a logical thing to do for these functions is to coerce the rational numbers to numeric and then use the usual function.
+The .Generic object is a character string that gives the name of the generic function that was called. So Math.rationalnum does three simple things: warn that coercion is taking place, do the coercion, call the next (default) method for the function. Here is an example:
+ jjr2 <- rationalnum(-5:6, 12)
+> exp(jjr2)
+ [1] 0.6592406 0.7165313 0.7788008 0.8464817 0.9200444
+ [6] 1.0000000 1.0869040 1.1813604 1.2840254 1.3956124
+[11] 1.5168968 1.6487213
+Warning messages:
+  coercing rational numbers to numeric in: Math.rati\
+        onalnum(jjr2)
+> abs(jjr2)
+ [1] 0.41666667 0.33333333 0.25000000 0.16666667
+ [5] 0.08333333 0.00000000 0.08333333 0.16666667
+ [9] 0.25000000 0.33333333 0.41666667 0.50000000
+Warning messages:
+  coercing rational numbers to numeric in: Math.rati\
+        onalnum(jjr2)
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+10.2. RATIONAL NUMBERS 253
+We have gone too far—there is no need to coerce to numeric to get the absolute value. The solution is to write a method for abs—this specific method will take precedence over the group method.
+"abs.rationalnum"<-
+function(x)
+{
+}
+x$numerator <- abs(x$numerator)
+x$denominator <- abs(x$denominator)
+x
+}
+After this is defined, we get:
+> abs(jjr2)
+ [1] 5/12 1/3  1/4  1/6  1/12 0
+[11] 5/12 1/2
+1/12 1/6  1/4  1/3
+The default method for unique is implemented as selecting those elements that are not duplicated. In writing a method of unique for rational numbers, our trick of doing the same operation on numerator and denominator is not going to work. The following is a cheap way out; to match the default method, we would need to treat incomparables also.
+"unique.rationalnum"<-
+function(x)
+{
+xchar <- paste(x$numerator, "/", x$denominator
+        )
+x$names <- NULL
+x[!duplicated(xchar)]
+With rational numbers we have the opportunity to get very precise answers that are wrong. Checking the veracity of the computations is an important part of the programming. Here is a function that helps with that job.
+"fjjcheckrationalnum"<-
+function(num = c( - Inf, -10, -7, -4, -2, -1, 0, 1, 2,
+{
+4, 7, 10, Inf, NA, 0/0), den = num, test = T)
+anum <- expand.grid(num, den)
+ratnum <- rationalnum(anum[, 1], anum[, 2])
+if(test) {
+        all.equal(anum[, 1]/anum[, 2], ratnum$
+                num/ratnum$den)
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+254
+}
+CHAPTER 10. NUMBERS
+}
+}
+else ratnum
+The expand.grid call gives us a data frame containing every combination of numbers in num with numbers in den. The function then either tests the value of the rational numbers versus their true value, or returns the rational numbers. The default value for num gives all of the special values plus 0, 1, 2, a prime number and some composite numbers.
+> fjjcheckrationalnum()
+[1] T
+> jjrt <- fjjcheckrationalnum(test=F)
+> length(jjrt)
+[1] 225
+> class(jjrt)
+[1] "rationalnum"
+The test passes, and then we capture the vector of rational numbers for further testing.
+This is a function to test operations on rational numbers:
+"fjjcheckratop"<-
+function(op, r1, r2, test = T)
+{
+unary <- missing(r2)
+n1 <- as.numeric(r1)
+if(unary) {
+}
+else {
+ra <- eval(parse(text = paste(op,
+        deparse(substitute(r1)))))
+nn <- get(op)(n1)
+n2 <- as.numeric(r2)
+ra <- eval(parse(text = paste(deparse(
+        substitute(r1)), op, deparse(
+        substitute(r2)))))
+nn <- get(op)(n1, n2)
+} if(test)
+        all.equal(nn, as.numeric(ra))
+else cbind(nn, as.numeric(ra))
+This has the same sort of form: do the computation with both rational numbers and numeric vectors, and either compare them to see if they are all the same, or return the numbers.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+10.2. RATIONAL NUMBERS 255
+> fjjcheckratop("+", jjrt, jjrt)
+[1] "Missing value mismatches: 93 in current, 61  in target"
+> jjrplus <- fjjcheckratop("+", jjrt, jjrt, F)
+Now we see trouble. The second call gives us the numbers so that we can investigate. The trouble boils down to:
+> jjri <- rationalnum(Inf, 1)
+> jjri
+[1] Inf
+> jjri + jjri
+[1] NA
+The problem is that infinity is represented as 1/0 but it would be better if it were ∞/1. This led to a rewrite of reduce.rationalnum. The revised version is:
+"reduce.rationalnum"<-
+function(x)
+{
+        signnz <- function(x)
+        {
+                x <- sign(x)
+                x[x == 0] <- 1
+                x
+        }
+# start of main function
+        num <- round(x$numerator)
+        den <- round(x$denominator)
+        nans <- ((num == 0 & den == 0) | (is.inf(num) &
+                is.inf(den)))
+        nans[is.na(nans)] <- F
+        nans[is.nan(num) | is.nan(den)] <- T
+        nas <- (is.na(num) | is.na(den)) & !nans
+        infs <- ((is.inf(num) & !is.inf(den)) | (num !=
+                0 & den == 0)) & !nas & !nans
+        zeros <- is.inf(den) & !nans & !nas
+        out <- nas | nans | infs | zeros
+        fact <- great.common.div(num[!out], den[!out])
+        x$numerator[!out] <- as.integer(num[!out]/fact *
+                signnz(den[!out]))
+        x$denominator[!out] <- as.integer(abs(den[!out
+                ]/fact))
+        x$numerator[nans] <- x$denominator[nans] <-
+                as.integer(0)
+        x$numerator[infs] <- (Inf * signnz(den[infs]) *
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+256
+}
+CHAPTER 10.
+NUMBERS
+        signnz(num[infs]))
+x$denominator[infs | zeros] <- 1
+x$numerator[zeros] <- 0
+x$numerator[nas] <- NA
+x
+I like this version much better. That it works correctly is of course a plus, but it is more firmly rooted in the problem. The first version tried to get by with minimal attention to the weird cases—as a result it had code that was hard to understand (as well as being wrong). This version accepts that there are special cases to be addressed, and attacks them head on. Thankfully the bug has saved us from staying with the original version.
+You will notice that I’m fairly liberal in my use of parentheses in logical statements—it’s easier this way to be sure that S and I are both thinking the same.
+10.3 Polygamma
+The digamma function, often denoted ψ(x), is defined as ψ(x) = d logeΓ(x)
+dx
+That is, this is the first derivative of the lgamma function.
+(10.1)
+￼￼DANGER. Some people use Γ(x + 1) instead of Γ(x). There is an easy trans- lation between the two forms. However, this difference is subtle enough to give you headaches if you are checking your answers, and wrong answers if you are not.
+Each polygamma function is a derivative of ψ(x) of some order. The trigamma function is the first derivative, the tetragamma function is the second derivative, and so on.
+Our polygamma S function specifies the order of the derivative of ψ via either a number or a character string.
+> polygamma(1:5, 1)
+[1] 1.6449341 0.6449341 0.3949341 0.2838230 0.2213230
+> polygamma(1:5, "trigam")
+[1] 1.6449341 0.6449341 0.3949341 0.2838230 0.2213230
+> polygamma(1, 1:4)
+[1]   1.644934  -2.404114   6.493939 -24.886266
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+￼
+10.3. POLYGAMMA 257
+The first two commands are the same—they merely use different conventions for indicating which polygamma function to compute. The last call is for a single x value at four different orders of the derivative.
+Here is the S code:
+"polygamma"<-
+function(x, n, low = 0.0001, high = 100, terms = 5)
+{
+        if(!length(x))
+                return(x)
+        if(is.character(n)) {
+                n <- pmatch(n, c("trigamma",
+}
+else {
+        "tetragamma", "pentagamma",
+        "hexagamma"), dup=T)
+if(any(is.na(n)))
+        stop("unknown or ambiguous name")
+n <- round(n)
+if(any(n < 1))
+        stop("n must be a positive integer")
+}
+terms[terms > 30] <- 30
+xatt <- attributes(x)
+x <- as.numeric(x)
+if(any(x <= 0, na.rm = T))
+        stop("only positive values allowed")
+alldat <- cbind(x = x, n = n, low = low, high
+         = high, terms = terms)
+xna <- is.na(alldat[, "x"])
+alldat[xna, "x"] <- 0.5 * alldat[xna, "low"]
+if(!is.loaded(symbol.C("polygamma_Sp")))
+        poet.dyn.load("polygamma.o")
+ans <- .C("polygamma_Sp",
+        as.double(alldat[, "x"]),
+        as.integer(dim(alldat)[1]),
+        as.integer(alldat[, "n"]),
+        as.double(alldat[, "low"]),
+        as.double(alldat[, "high"]),
+        as.integer(alldat[, "terms"]),
+        as.double(gamma(alldat[, "n"] + 1)))[[
+        1]]
+ans[xna] <- NA
+if(length(ans) == length(x))
+ans
+attributes(ans) <- xatt
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+258 CHAPTER 10. NUMBERS }
+Here are the steps that the function performs. If the length of the input is zero, then just return it—it is often much cleaner when functions work with zero length inputs. If n is given as character, then convert to the numeric order of the derivative. Save the attributes of the input x so that they can be given to the output. Test the validity of the input, and scream if it isn’t right. The call to cbind is a kludge of significance. We want the function to be vectorized in all of the arguments, so we use cbind to do all of the necessary replications and issuing of warnings in a single line of our code. We’re not interested in the matrix that results—we only want everyone to be the same length. Another kludge follows in which the locations of missing values are noted, and then replaced by an arbitrary number—we’ll put the missing values back in the end. Finally we call C where the real work is done, and then clean up the result before returning.
+Below is the C code that computes the values. This is listed in a logical order, but note that some compilers insist that static objects be defined in a file before they are used. Such compilers would be upset with the order of these functions.
+#include <math.h>
+void
+polygamma_Sp(x, len, n, low, high, terms, nfact)
+long *len, *n, *terms;
+double *x, *low, *high, *nfact;
+{
+        long i;
+        double polygamma();
+        for(i=0; i < *len; i++) {
+                x[i] = polygamma(x[i], n[i], low[i], high[i],
+                        terms[i], nfact[i]);
+} }
+/* Bernoulli numbers of even order from 2 to 60 */
+static double
+bernou[30] = {1.0/6.0, -1.0/30.0, 1.0/42.0, -1.0/30.0, 5.0/66.0,
+        -691.0/2730.0, 7.0/6.0, -3617.0/510.0, 43867.0/798.0,
+        -174611.0/330.0, 854513.0/138.0, -236364091.0/2730.0,
+        8553103.0/6.0, -23749461029.0/870.0, 8615841276005.0/14322.0,
+        -7709321041217.0/510.0, 2577687858367.0/6.0,
+        -1.371165521e13, 4.883323190e14, -1.929657934e16,
+        8.416930476e17, -4.033807185e19, 2.115074864e21,
+        -1.208662652e23, 7.500866746e24, -5.038778101e26,
+        3.652877648e28, -2.849876930e30, 2.386542750e32,
+        -2.139994926e34};
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+10.3. POLYGAMMA 259
+static double
+polygamma(x, n, low, high, terms, nfact)
+long n, terms;
+double x, low, high, nfact;
+{
+        /*
+         * polygamma function of a real positive x
+         * no checks are made here on the suitability
+         * of arguments
+         */
+        long i;
+        double asign, ans = 0.0, nd = (double) n, nexp, ser = 0.0;
+        double t0, x2_inv;
+        asign = (n % 2) ? 1.0 : -1.0;
+        if(x < low) {
+                return(asign * nfact / nd * pow(x, - nd) *
+                        (1.0 + nd * .5 / x));
+}
+        nexp = - nd - 1.0;
+        while(x < high) {
+                ans = ans + asign * nfact * pow(x, nexp);
+                x = x + 1.0;
+}
+        t0 = nfact / nd * pow(x, - nd);
+        ser = t0 * ( 1.0 + nd * .5 / x);
+        x2_inv = pow(x, -2.0);
+        for(i=0; i < terms; i++) {
+}
+}
+if(n ==1) {
+        t0 = t0 * x2_inv;
+} else {
+        t0 = (2.0 * i + nd + 3.0) / (2.0 * i + 4.0) *
+                (2.0 * i + nd + 2.0) / (2.0 * i + 3.0) *
+                t0 * x2_inv;
+}
+ser = ser + bernou[i] * t0;
+ans = ans + asign * ser;
+return(ans);
+polygamma Sp is called from S—it merely vectorizes the call to the real computing function. Here’s the idea of the algorithm that the polygamma C
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+￼
+260 CHAPTER 10. NUMBERS
+function uses. If x is close to zero, then we have a good approximation. If x is large, then we have a good approximation. We have a formula for the function at x in terms of the function at x + 1. If x is neither big nor small, then use the recurrence formula n times where x + n is larger than the lower bound for “big”.
+Checking that we are getting correct answers is a little problematic. We can achieve some measure of comfort by seeing that our answers match some of those listed in Abramowitz and Stegun (1964). All of the results of the following function should be close to zero.
+> fjjcheckpolygam
+function()
+{
+        x <- c(1.095, 1.92, 1.11, 1.11, 1.98, 1.98)
+        n <- c(1, 1, 2, 3, 2, 3)
+        pg <- c(1.4426631755, 0.6789231293,
+                -1.8170975731, 4.3602088083,
+                -0.4141726631, 0.5120891127)
+        polygamma(x, n) - pg
+}
+> fjjcheckpolygam()
+[1]  1.090934e-10  3.076084e-11  2.168104e-09
+[4] -1.319442e-10  2.126171e-09 -9.041279e-11
+In general this looks good, but the values for the tetragamma (third and fifth) are a little worrisome. Let’s revise the function so that we can control the computations and investigate further.
+> fjjcheckpolygam
+function(...)
+{
+        x <- c(1.095, 1.92, 1.11, 1.11, 1.98, 1.98)
+        n <- c(1, 1, 2, 3, 2, 3)
+        pg <- c(1.4426631755, 0.6789231293,
+                -1.8170975731, 4.3602088083,
+                -0.4141726631, 0.5120891127)
+        polygamma(x, n, ...) - pg
+}
+> fjjcheckpolygam(terms=9)
+[1]  1.090934e-10  3.076084e-11  2.168104e-09
+[4] -1.319442e-10  2.126171e-09 -9.041279e-11
+> fjjcheckpolygam(high=200)
+[1]  1.090941e-10  3.076095e-11  9.430390e-11
+[4] -1.956035e-11  1.252483e-10  1.713751e-11
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+10.3. POLYGAMMA 261 Increasing the number of terms has little effect, but changing high does give us
+the accuracy contained in the table.
+Another check is to see if the multiplication formula works. The formula is:
+(n)
+ﰨﰩ 1 ﰫ (n) k
+m−1 k=0
+ψ x + m (10.2) The following function vectorizes this with the help of the outer function.
+(mx) = mn+1 function(x, n, mult = 2, ...)
+ψ
+￼￼> fjjpolygammult
+{
+}
+if(length(n) != 1 || length(mult) != 1)
+        stop("bad input")
+partials <- polygamma(outer(x, (0:(mult - 1))/
+        mult, "+"), n)
+partials <- partials %*% rep(mult^( - (n + 1)),
+        mult)
+drop((polygamma(x * mult, n, ...) - partials)/
+        abs(partials))
+One side of the equation is subtracted from the other so that the result should be near zero, and the difference is normalized so we get the relative difference. The “bad input” error message would be too terse if this were a function that would be used much. But this is a private function that is just for verifying, so just making sure that we use it properly is good enough.
+Here is how we do:
+> fjjpolygammult(c(.5, 5, 10, 100, 1000, 1e6), 1)
+[1] -4.049608e-16 -6.598018e-16  5.413523e-16
+[4] -1.730390e-16  0.000000e+00  2.117582e-16
+> fjjpolygammult(c(.5, 5, 10, 100, 1000, 1e6), 2)
+[1]  6.955094e-10  1.513223e-07  6.362287e-07
+[4] -1.636471e-05 -1.663615e-07 -1.668093e-13
+> fjjpolygammult(c(.5, 5, 10, 100, 1000, 1e6), 3)
+[1] -1.574678e-11 -4.407812e-08 -3.796090e-07
+[4]  4.270955e-05  4.364444e-07  4.377635e-13
+> fjjpolygammult(c(.5, 5, 10, 100, 1000, 1e6), 20)
+[1]  2.104482e-16  0.000000e+00  1.124138e-16
+[4] -1.860500e-03 -2.072273e-05 -2.097891e-11
+We can do a transformation to see about how many significant digits we get:
+> round(-log10(abs(fjjpolygammult(c(0.5, 5, 10, 100,
++ 1000, 1e6), 2, high=900))), 1)
+[1]  9.6  7.3  6.7  4.7  6.8 12.8
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+262 CHAPTER 10. NUMBERS Values near 100 seem to be the most troublesome. The following examines
+the effect of changes in the high argument for tetragamma of 100:
+> print(as.matrix(polygamma(100, 2, high=c(50,100, 200,
++       400, 1000, 5000, 1e5))), digits=15)
+                      [,1]
+[1,] -0.000101002777700007
+[2,] -0.000101002777700007
+[3,] -0.000101004860945850
+[4,] -0.000101004991152816
+[5,] -0.000101004999611128
+[6,] -0.000101004999832995
+[7,] -0.000101004999833349
+The differences in these values shows that it is probably too much to hope for to have one single choice for the parameters that control the algorithm. This does, however, show the value of S to investigate the quality of the computations.
+10.4 Digamma
+The digamma function is more useful and simpler than the polygamma, but it comes afterwards because complex as well as numeric arguments are allowed in the S implementation.
+> digamma(-2:5)
+[1]         NA         NA         NA -0.5772157
+[5]  0.4227843  0.9227843  1.2561177  1.5061177
+> digamma(complex(re=0:4, im=4:0))
+[1] 1.3915363+1.6957963i 1.1079807+1.4041297i
+[3] 0.9145915+0.9208073i 0.9946503+0.3766740i
+[5] 1.2561177+0.0000000i
+"digamma"<-
+function(x)
+{
+        if(!is.loaded(symbol.C("digamma_real_Sp")))
+                poet.dyn.load("digamma.o")
+        if(is.complex(x)) {
+                n <- length(x)
+if(!n)
+                        return(x)
+                ans <- .C("digamma_complex_Sp",
+                        NAOK = T,
+                        specialsok = T,
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+10.4. DIGAMMA
+}
+else {
+} }
+263
+        z = as.complex(x),
+        as.integer(n),
+        ans.almost = complex(n))
+ans <- ans$ans.almost + log(ans$z)
+attributes(ans) <- attributes(x)
+ans
+storage.mode(x) <- "double"
+.C("digamma_real_Sp",
+        NAOK = T,
+        specialsok = T,
+        x,
+        as.integer(length(x)))[[1]]
+This function contains only a test of the mode of the input to decide which of two C functions to use.
+Here’s the C code:
+#include <math.h>
+#include <S.h>
+void
+digamma_real_Sp(x, n)
+long *n;
+double *x;
+{
+        long i;
+        double digamma_real_pos();
+        for(i=0; i < *n; i++) {
+                if(is_na(x + i, DOUBLE)) ;
+                else if(x[i] <= 0.0) na_set3(x + i, DOUBLE, Is_NaN);
+                else if(is_inf(x + i, DOUBLE)) inf_set(x + i, DOUBLE, 1);
+                else x[i] = digamma_real_pos(x[i]);
+} }
+static double stirling[] = {
+                -8.333333333333333e-02,  8.333333333333333e-03,
+                -3.968253968253968e-03,  4.166666666666667e-03,
+                -7.575757575757576e-03,  2.109279609279609e-02,
+                -8.333333333333334e-02,  4.432598039215686e-01,
+                -3.053954330270120e+00,  2.645621212121212e+01,
+                -2.814601449275362e+02,  3.607510546398047e+03
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+264 CHAPTER 10. NUMBERS };
+static double
+digamma_real_pos(x)
+double x;
+{
+        long i;
+        double lower, upper, euler_one, ans, x_inv, x_pow;
+        lower = 1.0e-8;
+        upper = 19.5;
+        /* euler = -.577215664901532860606512; */
+        euler_one = .422784335098467139393488;
+        /* expects x to be positive and finite - NO CHECKS HERE */
+        if(x < lower) {
+                ans = - 1.0 / x - 1.0 / (1.0 + x) + euler_one;
+                return(ans);
+}
+        ans = 0.0;
+        while(x < upper) {
+                ans = ans - 1.0 / x;
+                x = x + 1.0;
+}
+        x_inv = 1.0 / x;
+        ans = ans + log(x) - .5 * x_inv;
+        x_inv = x_inv * x_inv;
+        x_pow = x_inv;
+        for(i=0; i < 12; i++) {
+                ans = ans + stirling[i] * x_pow;
+                x_pow = x_pow * x_inv;
+        }
+        return(ans);
+}
+void
+digamma_complex_Sp(z, n, ans)
+long *n;
+complex z[], ans[];
+/* the usual shortcut of *z for z[] is not a good idea here */
+{
+        long j, i;
+        double upper;
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+10.4. DIGAMMA 265 complex z_inv, z_pow;
+        complex mult_complex(), inverse_complex();
+upper = 19.5;
+        for(j=0; j < *n; j++) {
+                if(is_na(z + j, COMPLEX)) {
+} }
+static complex
+mult_complex(x, y)
+complex x, y;
+{
+}
+complex ans;
+ans.re = x.re * y.re - x.im * y.im;
+ans.im = x.im * y.re + x.re * y.im;
+return(ans);
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+continue;
+}
+if(is_inf(z + j, COMPLEX)) {
+        na_set3(ans + j, COMPLEX, Is_NaN);
+        continue;
+}
+ans[j].re = 0.0; ans[j].im = 0.0;
+while(z[j].re < upper) {
+        z_inv = inverse_complex(z[j]);
+        ans[j].re = ans[j].re - z_inv.re;
+        ans[j].im = ans[j].im - z_inv.im;
+        z[j].re = z[j].re + 1.0;
+}
+z_inv = inverse_complex(z[j]);
+ans[j].re = ans[j].re - .5 * z_inv.re;
+ans[j].im = ans[j].im - .5 * z_inv.im;
+z_inv = mult_complex(z_inv, z_inv);
+z_pow = z_inv;
+for(i=0; i < 12; i++) {
+        ans[j].re = ans[j].re + stirling[i] * z_pow.re;
+        ans[j].im = ans[j].im + stirling[i] * z_pow.im;
+        z_pow = mult_complex(z_pow, z_inv);
+}
+/* ans still needs log(z) added to it */
+
+266 CHAPTER 10. NUMBERS
+static complex
+inverse_complex(x)
+complex x;
+{
+}
+complex ans;
+double den;
+den = x.im * x.im + x.re * x.re;
+ans.re = x.re / den;
+ans.im = - x.im / den;
+return(ans);
+The computing algorithms are analogous to the polygamma algorithm. In this case, though, the parameters are hard-coded in C. Another difference is that the complex version has no lower cutoff—it iterates until the real part is large enough. Hence it will be slow to compute values for numbers with large negative real parts.
+The C routines called by S take care of special values with the macros that live in S.h. Complex arithmetic operators are not available to us, so we need to make our own. To perform this algorithm, all we need is complex multiplication and inversion. We need a complex logarithm also, but that can be done at the end in S.
+This code provides an example of how to test and set special values in C code written for S. Note that the .C call needs additional arguments so that special values can be passed into C. An introduction to dealing with special values in C is on page 175.
+The comment in digamma real pos about checks on appropriate inputs is to help ensure that good code will be written when this routine is stolen for another purpose.
+Here is a test of garbage input:
+> digamma(letters)
+ [1] NA NA NA NA NA NA NA NA NA NA NA NA NA NA NA NA NA
+[18] NA NA NA NA NA NA NA NA NA
+Warning messages:
+  26 missing values generated coercing from character
+        to numeric in: storage.mode(x) <- "double"
+This is not such a bad thing to happen—it doesn’t seem worth creating an error for this.
+As with the polygamma functions, it is a non-trivial task to verify that our computations are correct. One thing we know for all real numbers is that the complex version should match the real version:
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+￼￼
+10.4. DIGAMMA 267
+> Mod(digamma(10:20) - digamma(as.complex(10:20)))
+ [1] 0.000000e+00 0.000000e+00 0.000000e+00
+ [4] 0.000000e+00 0.000000e+00 0.000000e+00
+ [7] 4.440892e-16 4.440892e-16 0.000000e+00
+[10] 0.000000e+00 0.000000e+00
+This is not an especially good test to see if we get the right answers (since both algorithms could be wrong), but it is a good test to make sure that we haven’t made a blunder in one of the C functions—the complex arithmetic would have been a likely spot.
+Here is a function that returns the difference between the result of digamma and values from a table in Abramowitz and Stegun (1964).
+> fjjcheckdigam
+function()
+{
+        x <- c(1, 1.055, 1.965, 2, 56, 100)
+        digx <- c(-0.57721566490153, -0.4902094448,
+                0.3999605371, 0.4227843351,
+                4.016396547, 4.6001618527)
+        digamma(x) - digx
+}
+> fjjcheckdigam()
+[1] -3.330669e-15 -1.574552e-11  2.545408e-12
+[4] -1.533662e-12  2.455547e-11  3.808776e-11
+We only have 10 digits from Abramowitz and Stegun except for the first value which is Euler’s constant, so the test passes. Here is a similar test with complex numbers:
+> fjjcheckdigamcom
+function()
+{
+        z <- c(2+10i, 1.4+5.9i, 1+8.4i)
+        digamz <- c(2.31332+1.42179i, 1.78533+1.41907i,
+                2.1294144191+1.51127i)
+        digamma(z) - digamz
+}
+> fjjcheckdigamcom()
+[1]  2.537704e-07-3.574195e-06i
+[2]  2.306153e-06-1.216597e-06i
+[3] -2.293676e-11+2.517271e-06i
+This also gives as good of results as we can expect.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+268 CHAPTER 10. NUMBERS There is a duplication formula for the digamma. We can use it to reassure
+ourselves. The equation is
+ψ(2z) = 2ψ(z) + 2ψ z + 2 + log(2) (10.3)
+1 1ﰨ1ﰩ
+Once again in the test function, we subtract one side of the equation from the
+￼￼￼other so that the result should be near zero:
+> fjjdigamdup
+function(z)
+{
+        Mod(0.5 * digamma(z) + 0.5 * digamma(z + 0.5) +
+                log(2) - digamma(2 * z))
+}
+> fjjdigamdup(complex(re=1:10, im=2:11))
+ [1] 3.140185e-16 2.220446e-16 4.440892e-16
+ [4] 8.950904e-16 0.000000e+00 1.110223e-16
+ [7] 1.110223e-16 1.110223e-16 0.000000e+00
+[10] 4.440892e-16
+We can also use the reflection formula as a test. The equation is ψ(1 − z) = ψ(z) + π cot(πz)
+and the test function is:
+> fjjdigamreflect
+function(z)
+{
+        Mod(digamma(z) + pi/tan(pi * z) - digamma(1 -
+                z))
+}
+> fjjdigamreflect(jj <- complex(re=rnorm(10, sd=1000),
++       im=rnorm(10, sd=1000)))
+ [1] 8.881784e-16 1.776357e-15 9.930137e-16
+ [4] 2.220446e-16 2.220446e-16 1.110223e-16
+ [7] 9.155134e-16 2.081668e-16 9.930137e-16
+[10] 1.110223e-15
+So far we haven’t found a reason to disbelieve digamma.
+10.5 Continued Fractions
+(10.4)
+Continued fractions are a way of approximating a function. They often represent an alternative to a series approximation to the function. When both types of
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+10.5. CONTINUED FRACTIONS 269
+approximation exist for a function, it can be the case that the continued fraction converges fast in one part of the domain and the series converges fast in the other.
+A continued fraction can be written as
+a1 b1 +
+b2+ b3
+but for typographical convenience is usually written
+a1 a2 a3 b1+ b2+ b3+
+(10.5)
+(10.6)
+￼a2 a3
+￼￼￼￼￼which gives the opportunity to add an ellipsis since most continued fractions of interest are infinite.
+The first thing that we do is write a simple function to compute a continued fraction:
+"fjjcontinue.fraction"<-
+function(a, b)
+{
+}
+n <- length(a)
+if(length(b) != n)
+        stop("a and b do not match")
+if(n < 2)
+        stop("not enough terms")
+bottom <- b[n]
+for(i in n:2) {
+        bottom <- b[i - 1] + a[i]/bottom
+}
+a[1]/bottom
+This has the distinct disadvantage that it is not vectorized, so it is of little value. Below is one way of vectorizing the computations—I’m not convinced that it is the best way.
+"continue.fraction"<-
+function(num, den)
+{
+        num <- as.matrix(num)
+        den <- as.matrix(den)
+        if(any(dim(num) != dim(den)))
+                stop("num and den do not match")
+        n <- nrow(num)
+if(n < 2)
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+270
+CHAPTER 10. NUMBERS
+} }
+        stop("not enough terms")
+bottom <- den[n,  ]
+for(i in n:2) {
+        bottom <- den[i - 1,  ] + num[i,  ]/
+                bottom
+num[1,  ]/bottom
+This function takes two matrices of the same size, the number of columns is the length of the result, and the number of rows is the number of terms in the continued fractions. Although this function could be called directly, it is more likely that another function that returns a mathematical function will call it.
+One function that can be computed well with a continued fraction is the exponential integral. It is defined as
+ﰬ ∞ e−zt
+tn dt (10.7)
+where n is a non-negative integer. Real values of z must be positive.
+Press et al (1992) give the continued fraction in which we are interested:
+En(z) = e−z
+This is relatively easy to translate into S:
+···
+z+n+2i−
+··· (10.8)
+En(z) =
+￼ﰨ 1 n 2(n + 1) z+n− z+n+2− z+n+4−
+i(n + i − 1) ﰩ
+1
+￼￼￼￼"fjjexp.integral"<-
+function(z, n, nterms = 9)
+{
+outlen <- max(length(z), length(n))
+z <- rep(z, length = outlen)
+n <- rep(n, length = outlen)
+tseq <- 0:(nterms - 1)
+num <-  - outer(tseq - 1, n, "+") * tseq
+num[1,  ] <- 1
+den <- outer(2 * tseq, z + n, "+")
+exp( - z) * continue.fraction(num, den)
+}
+The outer function is instrumental in creating the matrices that are required
+by continue.fraction.
+As always, we turn to the tables in Abramowitz and Stegun (1964) to see
+if we are doing it right:
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+10.5. CONTINUED FRACTIONS 271
+> fjjcheckexpint
+function(nterms = 9)
+{
+        x <- c(1.95, 0.99, 0.5, 0.01, 0.01, 0.01, 0.01,
+                1.01, 1.01, 1.01, 1.01, 1.01)
+        n <- c(1, 1, 1, 3, 4, 10, 20, 2, 3, 4, 10, 20)
+        enx <- c(0.05241438, 0.223099826, 0.559773595,
+                0.4902766, 0.3283824, 0.1098682,
+                0.052079, 0.1463199, 0.1082179,
+                0.084973, 0.0359929, 0.0181539)
+        fjjexp.integral(x, n, nterms = nterms) - enx
+}
+> fjjcheckexpint()
+ [1] -1.756406e-07 -2.682575e-05 -9.489412e-04
+ [4] -7.990076e-03 -1.397079e-03 -2.188219e-06
+ [7] -5.328954e-08 -2.038522e-05 -1.198577e-05
+[10] -6.257321e-06 -1.073663e-07  2.527789e-08
+> fjjcheckexpint(100)
+ [1] -4.320013e-10 -2.098228e-10 -2.268147e-10
+ [4] -3.533094e-05 -9.879388e-07  2.627358e-08
+ [7] -4.582066e-08  3.953909e-08  2.031852e-08
+[10] -3.998339e-08  1.111485e-08  2.632293e-08
+> fjjcheckexpint(200)
+ [1] -4.320013e-10 -2.098227e-10 -2.238392e-10
+ [4] -4.090723e-06 -1.107696e-07  2.627360e-08
+ [7] -4.582066e-08  3.953909e-08  2.031852e-08
+[10] -3.998339e-08  1.111485e-08  2.632293e-08
+The continued fraction is reputed to converge slowest for small numbers. The algorithm in Press et al (1992) uses a series approximation instead of the continued fraction for numbers less than 1. It appears that using 100 terms in the continued fraction is a reasonable compromise between speed and accuracy.
+We can also check a few points for complex numbers:
+> fjjcheckexpintcomp
+function(nterms)
+{
+        z <- c(-2+0.2i, 1i, 2.5+0.6i)
+        n <- rep(1, length(z))
+        enzl <- c(-4.219228+0.636779i,
+                -0.337404+0.946083i,
+                0.961532+0.218215i)
+        fjjexp.integral(z, n, nterms = nterms) + log(z
+                ) - enzl
+> fjjcheckexpintcomp(100)
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+}
+
+272 CHAPTER 10.
+[1] -3.580492e-01+8.532514e-02i
+[2]  7.710208e-08+7.036693e-08i
+[3] -2.616037e-07-2.712842e-07i
+> fjjcheckexpintcomp(1000)
+[1]  8.268037e-04-5.364546e-05i
+[2]  7.709903e-08+7.036718e-08i
+[3] -2.616037e-07-2.712842e-07i
+> fjjcheckexpintcomp(5000)
+[1] -3.853327e-07-1.648335e-07i
+[2]  7.709903e-08+7.036718e-08i
+[3] -2.616037e-07-2.712842e-07i
+NUMBERS
+We now have good evidence that the function is coded properly, but we are left in the uncomfortable situation of not knowing where in the complex plane the approximation is going to be poor.
+Finally, the function can be made to behave more like other mathematical functions. The restriction put on n may cause some annoyance, but more likely it will catch blunders.
+"exp.integral"<-
+function(x, n, nterms = 100)
+{
+}
+if(!length(x))
+        return(x)
+xatt <- attributes(x)
+x <- as.vector(x)
+outlen <- length(x)
+if(length(n) == 1)
+        n <- rep(n, outlen)
+else if(length(n) != outlen)
+        stop("n must be one long or the length of x")
+n <- round(n)
+tseq <- 0:(nterms - 1)
+num <-  - outer(tseq - 1, n, "+") * tseq
+num[1,  ] <- 1
+den <- outer(2 * tseq, x + n, "+")
+ans <- exp( - x) * continue.fraction(num, den)
+attributes(ans) <- xatt
+ans
+If we needed an accurate calculation of the exponential integral function, then we would want to create code (in C) that would ensure that we got good accuracy for every value. We don’t have that here, but we do have an algorithm that works for both numeric and complex arguments that was quick to create.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+10.6. THINGS TO DO 273 10.6 Things to Do
+Extend the functionality of numberbase to non-integers, missing values and infinity. Is there a better way of organizing the computations?
+Teach numberbase to do mathematics. If the bases of two numbers in an op- eration are different, then what base should the answer be? How will you test the results?
+Write a function based on scan that will read in rational numbers printed in the same format that print.rationalnum uses. Is it robust to differences in white-space?
+Make rational numbers work within arrays, data frames and so on. Include matrix multiplication, and fill in any other holes in the implementation.
+There is no error given when there is overflow in the denominator or numerator in rationalnum objects:
+> jjr3 <- rationalnum(1, c(353, 713, 927, 213))
+> > jjr3[1] * jjr3[2] * jjr3[3]
+[1] 1/233315703
+> jjr3[1] * jjr3[2] * jjr3[3] * jjr3[4]
+[1] -1/1843362813
+How would you fix this problem? Are there changes that can be made to reduce the problem, even without a proper fix? Find and fix any other problems with rational numbers.
+Revise the great.common.div function to use C code. Write both a Euclidean algorithm version and a binary algorithm version of the C code. Is it worth changing to C code? Which algorithm works better? A description of the binary algorithm is given in Knuth (1981).
+Try to write a better version of continue.fraction.
+Create functionality for rational complex numbers.
+Make a class of objects of rational numbers in an arbitrary base.
+The polyroot S-PLUS function finds the roots of a polynomial of order at most 48. Create a function that does not have such a limitation. Young and Gregory (1973, volume 1) has a chapter on roots of polynomials.
+Try out at least three ways of evaluating polynomials. Test them for speed and memory use.
+Write functions that allow infinite-precision arithmetic.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+274
+Create functions that do symbolic mathematics.
+Write a suite of functions to do interval arithmetic. That is, instead of each quantity being a single number, you have a range of numbers that the quantity is known to lie in.
+10.7 Further Reading
+Knuth (1981) Seminumerical Algorithms contains a great deal of interesting material related to mathematical computing. It presents pretty much all you are likely to want to know about rational arithmetic. Other topics include radix conversion and continued fractions.
+Other books that discuss numerical computation include Young and Gregory (1973) A Survey of Numerical Mathematics; Hamming (1973) Numerical Meth- ods for Scientists and Engineers. Hamming discusses the polygamma functions, but uses the Γ(x + 1) form.
+Abramowitz and Stegun (1964) Handbook of Mathematical Functions con- tains much information on mathematical functions including the digamma and polygamma functions and the exponential integral. Approximations, tables of values and relationships between functions are just some of what is included.
+Press et al (1992) Numerical Recipes in C, Second Edition provides many numerical algorithms. In particular, they have one for the exponential integral for real values.
+Wall (1948). gives an in-depth treatment of continued fractions.
+10.8 Quotations
+34William Butler Yeats “The Cat and the Moon” 35W. H. Auden “In Memory of W. B. Yeats”

@@ -1,0 +1,191 @@
+S POETRY
+by Patrick J. Burns
+
+Chapter 15: Large Computations
+
+15.1 Backups
+15.2 Reduce and Expand
+15.3 Things to Do
+15.4 Further Reading
+15.5 Quotations
+
+
+How to live well on nothing a year.
+15.1 Backups
+When the computations are large in the sense of time-consuming but the answer
+is not especially large, I use a backup scheme. the job stops for some reason.
+Here is an example of the technique.
+"fjjsimbk"<-
+function(n, dof, trials = 100)
+{
+This saves partial results in case
+}
+ans }
+ans[i] <- simbk.sub(n, dof)
+if(i %% 10 == 0)
+        assign(backup, ans, where = 1,
+                immediate = T)
+355
+backup <- paste("sbk.BACKUP", unix("echo $$"),
+        sep = ".")
+simbk.sub <- function(n, dof)
+{
+        sum(rt(n, dof))
+}
+ans <- numeric(trials)
+attr(ans, "call") <- match.call()
+for(i in 1:trials) {
+356 CHAPTER 15. LARGE COMPUTATIONS
+In a real application the sub-function would not be so trivial (I would hope). The two statements involving backup implement the idea. The first statement cre- ates an object name that will be essentially unique from call to call of the func- tion. The second statement assigns the backup object to the working database at appropriate intervals. The immediate=T is key—this makes sure that the object is actually written to disk.
+To use this, we might make two different calls to the function, probably in two different files input to different BATCH jobs.
+ts.10.5 <- fjjsimbk(10,5)
+ts.20.3 <- fjjsimbk(20,3)
+At a later time we can see what exists in our database:
+> objects()
+[1] ".First"           ".Last.value"
+[3] ".Random.seed"     "sbk.BACKUP.13517"
+[5] "sbk.BACKUP.13843" "ts.10.5"
+Here we see that there is a backup object for each process, but only one “real” result from the function. It could be that the other call has merely not finished yet, or it may have crashed. The call attribute allows us to sort out which backup object is for which call.
+> attr(sbk.BACKUP.13517, "call")
+fjjsimbk(n = 10, dof = 5)
+> attr(sbk.BACKUP.13843, "call")
+fjjsimbk(n = 20, dof = 3)
+This scheme is useful for simulations and similar situations in which there are a number of results. It is harder to apply where there is really just a single answer.
+An alternative approach would be to have the function not return the object, but rather use the object that is assigned internally be the “result” of the function. In general, I’d rather avoid this—the hidden side effects can create confusion. Of course, fjjsimbk has hidden side effects also, but the side effects are of secondary importance and are unlikely to cause trouble. On the other hand, if the answer is a large object, then it may be wiser not to have two copies of it. For all averred, I had killed the bird 38
+15.2 Reduce and Expand
+I have created the generic functions reduce and expand to relieve memory problems. My first application was to minimize the use of disk-space by remov- ing components of objects that can be recreated. For example, we could create
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+15.2. REDUCE AND EXPAND 357
+an lm.reduced class that saves space by deleting the residuals. The residuals can be recreated by the expand method assuming that the original response is still available and unchanged.
+The default methods for reduce and expand both just return the first argu- ment unchanged. This allows you to try to reduce an already reduced object, or expand an unreduced object with no harm done.
+"reduce.default"<-
+function(x, ...)
+x
+Another use for reduce is to save on memory in computations. The reduced object is passed in, and only expanded at the last minute when needed.
+"fjjtwomat"<-
+function(n, m, k)
+{
+        seed <- .Random.seed
+        ans <- list(x = array(rnorm(n * m), c(n, m)),
+                y = array(rnorm(m * k), c(m, k)))
+        ans$seed <- seed
+        class(ans) <- "twomat"
+ans }
+The function above produces an object of a specific class that holds two matrices. Below is a matrix multiplication method for this class.
+"%*%.twomat"<-
+function(x)
+x$x %*% x$y
+The next function is a reduce method that stores the two matrices in new locations, and remembers those locations.
+"reduce.twomat"<-
+function(x, immediate = F)
+{
+# attempt to make unique name
+        basename <- paste("rEdUtwomat", unix("echo $$"
+                ), sep = ".")   #
+# ensure that it is unique
+        xname <- paste(basename, "x", sep = ".")
+        count <- 0
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+358
+CHAPTER 15. LARGE COMPUTATIONS
+bnchar <- nchar(basename)
+while(exists(xname, where = 1)) {
+        count <- count + 1
+        basename <- paste(substring(basename,
+                1, bnchar), count, sep = ".")
+        xname <- paste(basename, "x", sep =
+".")
+}
+yname <- paste(basename, "y", sep = ".")
+dbname <- search()[1]   # need absolute path
+if(AsciiToInt(dbname)[1] != 47) {
+        dbname <- paste(unix("pwd"), dbname,
+                sep = "/")
+}
+assign(xname, x$x, where = 1, immediate =
+        immediate)
+assign(yname, x$y, where = 1, immediate =
+        immediate)
+x$x <- c(name = xname, db = dbname)
+x$y <- c(name = yname, db = dbname)
+class(x) <- c("twomat.reduced", class(x))
+x
+}
+Most of the work is in ensuring that the names are unique and the full name of the working database is known. (Actually the code takes the liberty of assuming that if the “x” name doesn’t exist, then neither does the “y” name; this may not be a good idea depending on the mechanism used for removing these objects.) Below is an object of the reduced class—this is quite a small object, and is the same size no matter how large the matrices it represents.
+> jjtr $x:
+                 name                            db
+ "rEdUtwomat.18173.x" "/user/users/burns/spo/.Data"
+$y:
+ "rEdUtwomat.18173.y" "/user/users/burns/spo/.Data"
+$seed:
+[1]415751 7 5 22149271730 0
+attr(, "class"):
+[1] "twomat.reduced" "twomat"
+Here is the method for expanding the reduced object. It merely gets the real S Poetry ⃝c 1998 Patrick J. Burns v1.0
+name db
+
+15.2. REDUCE AND EXPAND 359 matrices, and peels off the first element of the class.
+"expand.twomat.reduced"<-
+function(x)
+{
+        xn <- x$x
+        yn <- x$y
+        x$x <- get(xn["name"], where = xn["db"],
+                immediate = T)
+        x$y <- get(yn["name"], where = yn["db"],
+                immediate = T)
+        class(x) <- class(x)[-1]
+x }
+It is a good idea to check that the methods work in the sense that reducing and then expanding gets you back to the same thing.
+> all.equal(jjt, expand(reduce(jjt, im=T)))
+[1] T
+> all.equal(jjt, expand(reduce(jjt, im=F)))
+Error in get.default(x$x["name"], whe..: Object "rEdU\
+        twomat.18201.x" not found
+Dumped
+This shows the usefulness of the immediate argument. If immediate is FALSE, then the objects that the reduce method create are not actually written (in S jargon, not committed) until just before the next S prompt is given. In the example above where an error occurs, the objects are merely marked to be written, but do not actually exist at the time that expand demands them.
+Below are some ingredients for testing how much memory is saved.
+> fjjmul1
+function(x)
+{
+        cat("memory at start  ", fjjcomma(memory.size(
+                )), "\n")
+        y <- x
+        cat("memory before fjjmul2  ", fjjcomma(
+                memory.size()), "\n")
+        ans <- fjjmul2(y)
+        cat("memory after fjjmul2  ", fjjcomma(
+                memory.size()), "\n")
+ans }
+> fjjmul2
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+360
+function(y)
+{
+        sum("%*%"(expand(y)))
+}
+> jjtmbig <- fjjtwomat(100, 200, 200)
+> fjjcomma(object.size(jjtmbig))
+[1] "480,475"
+And now we do the test, starting a new session each time.
+> fjjmul1(jjtmbig)
+memory at start   633,296
+memory before fjjmul2   1,321,424
+memory after fjjmul2   2,783,696
+[1] -1066.744
+Now, with the reduced version.
+> fjjmul1(jjtmbig.red)
+memory at start   633,296
+memory before fjjmul2   834,000
+memory after fjjmul2   2,296,272
+[1] -1066.744
+So we have saved one copy of the matrices in this example.
+15.3 Things to Do
+Revise or add to the reduce.twomat example so that there is not a problem with stored components existing that are no longer pointed to by a twomat.reduced ob ject.
+15.4 Further Reading
+Vanity Fair by William Makepeace Thackeray. 15.5 Quotations
+38Samuel Taylor Coleridge “The Rime of the Ancient Mariner”
+

@@ -1,0 +1,1433 @@
+S POETRY
+by Patrick J. Burns
+
+Chapter 9: S for S Programmers
+
+9.1 Databases
+9.2 Utilities
+9.3 Zero Length Objects
+9.4 Modes
+9.5 Evaluation
+9.6 Object-Oriented Programming
+9.7 Data Structures
+9.8 The R Language
+9.9 Things to Do
+9.10 Further Reading
+9.11 Quotations
+
+This chapter covers topics about S that are not explained in the previous chap- ters. Parts are of less than general interest.
+9.1 Databases
+When you start S, it looks for a .Data directory to use as the working database. In general you can think of this as merely holding files that each contain one of your S objects, where the name of the file and the name of the S object are the same. However, there are other entities living in .Data directories that may be of interest. Many of these are alluded to in the section below on utilities.
+The help files live in the .Help subdirectory of the .Data. Each object with help has a corresponding file in .Help. There is also the possibility of a .Cat.Help subdirectory—see page 193.
+The .Audit file is the location where the audit trail of S commands is kept. It is the .Audit in the working database as a session starts that is used. Once started, the same audit file is used throughout a session, no matter what the working database is.
+For names that are troublesome for the operating system, the actual file will be called something like ￼ ￼ 3 and there is a file called ￼ ￼ ￼ nonfile that is a dictionary to translate between the S object name and the file name.
+DANGER. At least in some versions of S-PLUS, there are occasions when a file is written with a name like ￼ ￼ 34352 that is not indexed in the ￼ ￼ ￼ nonfile file. I’m not sure of the circumstances under which these get created, I’m guess- ing that it is perhaps when there is some sort of interruption. Sometimes these objects can be quite large. If you see a suspicious file like this, you can check to see that it is not listed in ￼ ￼ ￼ nonfile and remove it.
+187
+￼￼
+188 CHAPTER 9. S FOR S PROGRAMMERS
+In recent S-PLUS versions the databases of in-built objects contain one file that holds all of the objects (called ￼ ￼ BIG) and a file to index the objects (called
+BIGIN). This reduces the amount of memory that the database uses. 9.2 Utilities
+When you give the command to start S, you are really starting a Unix script that does a number of things, one of which is to start the executable (the actual language), which is called Sqpe. One of the things that this script allows is an extra argument which is the name of a utility. A utility is an executable that lives in the cmd subdirectory of SHOME—the utility is executed instead of the S language.
+The BATCH utility is probably the most commonly used. It is invoked like
+% S BATCH b.in b.out
+where b.in is a file of S commands and b.out is where the results go. If b.out already exists, the previous contents will be deleted. Note that what I am writing as S here should be replaced with the command you use to start S.
+BATCH jobs are good for running long computations. If you often run several BATCH jobs on a variety of machines, then starting your input files with
+!hostname
+date()
+can help you keep all of the jobs straight. For instance, if you want to kill one of the jobs, you can tell which process to kill even if you have more than one batch job running on the machine in question. I like to put date() at the end of the file also.
+It is frustrating to check a batch job after a weekend and find that it didn’t do anything because of a typo or other minor error. A partial guard against this is to perform an S command like:
+parse(file="b.in")
+where b.in is the name of the input file for the batch job. The result will either be an expression or an error. It will be syntax errors that are found, such as missing parentheses. If there is no error, you still don’t know for sure that it will work—you may need to attach a directory, or may have misspelled a name—but I often find this check worth the effort. See also my fix for browser.default on page 138.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+￼￼
+9.2. UTILITIES 189
+The command
+% S SHOME
+simply returns the path of where S lives. Though simple, it is very expedient at times. You can get a sense of all of the utilities available to you by doing:
+% ls ‘S SHOME‘/cmd
+Not all of the files there are utilities, but many are.
+The REPORT utility is probably underutilized. This takes a file that is gen- erally in a typesetting language like TEX or troff that contains some specially marked sections of S commands. The result is a different file with the output resulting from the S commands replacing those commands.
+Here is a trivial example. Our (naive) input file (called rep.in) looks like:
+% cat rep.in
+Harold weighs { jjwt["harold"] } kilograms, but
+Dorothy weighs {jjwt["dor"]}.
+The S commands are surrouned by braces. The utility is fired up and then we view the resulting file:
+% Splus REPORT rep.in rep.out1
+REPORT will run in batch: input from file rep.in,
+output on file rep.out1.
+% cat rep.out1
+S-PLUS : Copyright (c) 1988, 1995 MathSoft, Inc.
+S : Copyright AT&T.
+Version 3.3 Release 1 for Silicon Graphics Iris,
+IRIX 5.2 : 1995
+Working data will be in .Data
+attaching dotFunctions
+Harold weighs harold
+15 kilograms, but
+Dorothy weighs dorothy
+14.
+We get two problems in one go. The first problem is that all of the printing when S-PLUS starts gets put into the output file. The second problem is that we are getting the names of the quantities that we want as well as the numbers themselves. What gets put into the output file is everything that S says in response to the commands, so we need to be a little more careful about our commands. The cat function comes to the rescue:
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+190 CHAPTER 9. S FOR S PROGRAMMERS
+% cat rep.in2
+Harold weighs { cat(jjwt["harold"], "\n", sep="") } kilograms, but
+Dorothy weighs {cat(jjwt["dor"], "\n", sep="")}.
+Note that the backslash-n in the cat calls is of importance. The solution to the startup printing is solved with:
+% setenv S_SILENT_STARTUP 1
+% setenv S_FIRST ’’
+The second command is optional, but in my case my .First prints some- thing, and this command avoids the call to .First. If the commands will need your .First and it prints something, then you will need to change the .First or have the S FIRST environment variable do the necessary actions.
+% Splus REPORT rep.in2 rep.out2
+REPORT will run in batch: input from file rep.in2,
+output on file rep.out2.
+% cat rep.out2
+Harold weighs 15 kilograms, but
+Dorothy weighs 14.
+Now our output file looks fine.
+You may be worrying that TEX files are going to be full of braces, so S is going to want to evaluate just about the whole file. The solution to this is to use the -e flag to REPORT. A bare -e means that the introductory brace for S commands is preceded by a backslash.
+% cat rep.in3
+Harold weighs \{ cat(jjwt["harold"], "\n", sep="") } kilograms,
+but {\it Dorothy weighs \{cat(jjwt["dor"], "\n", sep="")}.}
+% Splus REPORT -e rep.in3 rep.out3
+REPORT will run in batch: input from file rep.in3,
+output on file rep.out3.
+% cat rep.out3
+Harold weighs 15 kilograms,
+but {\it Dorothy weighs 14.}
+DANGER. There are occurrences of backslash-{ in TEX files, so this is only a partial solution. The help file for REPORT states that you can follow the -e with a character to use in place of the backslash, but that functionality seems to be broken (at least as of S-PLUS version 3.3 under some Unix systems). A workaround would be to change the backslash-{ combinations in the file that are not intended for S to something else, then change them back after S has
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+￼￼
+9.2. UTILITIES 191 processed the file.
+The LOAD utility performs static loading into S. A command with it might look like:
+% S LOAD mycode.o my_other_code.o
+If all is well, this will create a file named local.Sqpe in the current directory that will contain the usual S executable along with the additional code given in the command.
+The script that starts S looks in the current directory for a file named local.Sqpe. If it exists, then this is used as the S executable. If it doesn’t exist, then the usual executable is used. The local.Sqpe file is not going to be small, so you probably don’t want many of them around.
+There is more discussion of loading code into S starting on page 171.
+A utility added to S-PLUS is COMPILE which is used to compile source files in a way that makes the resulting object files suitable to be loaded into S. This is really a call to make. One thing that it does is make sure that the S.h include file is found.
+If COMPILE doesn’t work properly, it is probably because of a problem with your local installation.
+The purpose of the CHAPTER utility is to make it easy to create a library of S objects. The result of CHAPTER is to create a Makefile that allows easy updating. There are locations in the Makefile where you put the S dump files and the help files. Once the Makefile is edited, then you merely need to do:
+% make install
+and the S objects and help files are all put in the right place. You can redo the make install command any time that you have added files to the Makefile, or that you have changed existing dump or help files.
+DANGER. The Makefile that CHAPTER creates does not handle objects cre- ated by data.dump. In the Makefile for the code that goes with this book that was made by CHAPTER, I have added the target:
+install.objs: install.funs
+        echo "poet.data.restore(unix(’ls $(DDOBJS)’))" | Splus
+which is made part of the install target. The DDOBJS variable in my case is declared to be:
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+￼￼
+192 CHAPTER 9. S FOR S PROGRAMMERS DDOBJS=poet.verif.Q portoptgen.ctemplate.Q
+These are the objects that the sccs function used data.dump on.
+The situation is complicated when C or Fortran code is also involved, but CHAPTER can ease the pain in this case also.
+The S-PLUS utility NM is a convenient way to use the Unix nm command to examine the symbols in a file of object code. The advantage of Splus NM over nm is that the former has the same format on all platforms. Here is an example:
+% Splus NM digamma.o
+digamma.o:         U .stret8
+digamma.o:00000230 T _digamma_complex_Sp
+digamma.o:00000000 T _digamma_real_Sp
+￼digamma.o:
+digamma.o:
+digamma.o:
+digamma.o:
+digamma.o:
+U _log
+U _set_inf
+U _set_na
+U _test_inf
+U _test_na
+The C functions that are defined as static within the file do not appear, but the other functions do appear and are marked with a “T”, meaning that they are defined. Symbols marked “U” are not part of the object file, so if this file is to be loaded into S, then those symbols have to be known to S.
+Another S-PLUS utility is HINSTALL (it is undocumented). This installs help files, and is used like:
+% Splus HINSTALL .Data/.Help perl.d transcribe.d
+The first argument after HINSTALL is the help directory where the files are to go. After that an arbitrary number of files can be given that contain help. An advantage of using HINSTALL is that it automatically takes care of a file that is for more than one object. Near the top of a help file you will find a line like:
+.FN stack
+This line says what object the help file is for. To add the print method for
+stack to the help file, make it look like:
+.FN stack
+.FN print.stack
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+9.2. UTILITIES 193
+Mostly this FN command is ignored, but HINSTALL knows about it and does the right thing. That is, just putting FN lines in the file does nothing to make help for the additional objects unless you use HINSTALL.
+Because version 4 of S changes the way help works, I imagine that HINSTALL will go extinct.
+The category part of the S-PLUS help window system looks for the special file in each database on the search list that contains the information from the help files based on the function names, the titles and the keywords. When you add help files to the .Help subdirectory of a database, then the keywords in the new help files won’t be recognized until you update the file. Update it with the command:
+% Splus help.findsum .Data
+(This utility fell outside of the capitalization convention, you’ll notice.) The keywords in the help file can not be arbitrary—only a recognized set of keywords are used. See the list in the help file for prompt. There is also a help.findsum S-PLUS function that performs the same task as the utility.
+The ADDKEYWORD utility is meant to facilitate adding keywords to the list of acceptable ones. My one attempt at using this utility met with failure. However, it did usefully point to the file that needs to be changed. It is reasonably obvious what to do once you find the right file.
+The help files in version 3 of S are formatted by the Unix nroff command. Some machines do not have nroff so S will look in a .Cat.Help directory for preformatted help files before looking in the .Help directory. You can also use this if the extra added speed of getting help is worth the extra space taken up. The CATHELP utility will put the formatted files into the .Cat.Help directory.
+It is used like:
+% mkdir .Data/.Cat.Help
+% Splus CATHELP .Data
+S-PLUS has added the MASKED utility that shows objects in the working database that mask other objects.
+% Splus MASKED
+Searching user directory .Data ...
+S-PLUS also has a masked function, but if things are really messed up, it is possible that the function won’t do. See page 135 for a discussion of masking.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+194 CHAPTER 9. S FOR S PROGRAMMERS
+One of the things that S does behind the scenes is to keep an audit file of the commands given to S. This is used by the history function, can be examined with the AUDIT utility, and has potential to be used for other purposes also. (The magic to turn auditing off is given on page 160.) If the audit file grows to more than a certain size, you will get a message like:
+> q()
+Warning: Audit file is 519851 characters long.
+Run TRUNC_AUDIT to truncate it. See help file for complete
+        instructions.
+This is telling you to run a Unix command like:
+% Splus TRUNC_AUDIT
+Truncating audit file (.Data/.Audit) to most recent
+100000 characters
+Audit file truncated to 99913 characters
+This saved the most recent part of the file and threw away the older part. You can give it a number which tells the approximate number of characters to save. If you want none of the file saved, you would say:
+% Splus TRUNC_AUDIT 0
+The AUDIT utility provides a means of viewing what an audit file contains. The default file is the one that would be written to when you start S in the current directory—that is, the .Audit file that is in the .Data that S will use as the working directory—but you can specify the file of your choice.
+% S AUDIT
+Reading audit file ".Data/.Audit"
+3652 statements, 352 identifiers
+audit: G jjn
+.Data/jjn
+3463: jjn
+3462: jjn[jjn < 0] <- NA
+3461: jjn
+Above we start up AUDIT and look at the commands that “get” an object named jjn. Below we view the names that were both put and got (there are a lot, so the output is abridged):
+audit: N GP
+rw .Data/jjsy
+rw .Data/jjmat
+rw .Data/jjv
+...
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+9.3. ZERO LENGTH OBJECTS 195 Perhaps one of the more useful commands is the ability to backtrack a command
+number:
+audit: B 3463
+jjn
+~~~~~~~~~
+3463: jjn
+3462: jjn[jjn < 0] <- NA
+3268: jjn <- 1:5
+audit: q
+Type “q” to exit the AUDIT program.
+DANGER. I haven’t ever gotten the E command of AUDIT to work. Perhaps it does work on some machine, but I haven’t found it.
+The LICENSE utility of S-PLUS is primarily for system administration, but there is one function of general interest. The command
+% Splus LICENSE users
+produces a list of those currently using S-PLUS licenses. So you can decide who to harass when you can’t get a license.
+Finally two more utilities that may be of interest are EXEC and CSH. The EXEC utility executes a Unix command in the environment of S, and CSH gives you a C-shell with the S environment.
+% Splus EXEC env
+9.3 Zero Length Objects
+Objects of zero length are not uncommon in S. They can be unnerving for the uninitiated, but their existence adds a great deal of versatility to the language. Should we believe in nothing? 28
+Here is a common situation where zero length objects occur.
+￼￼> jjn <- 1:5
+> jjn[jjn < 0]
+numeric(0)
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+196 CHAPTER 9. S FOR S PROGRAMMERS Even when doing a replacement here, there is no problem.
+> jjn[jjn < 0] <- NA
+> jjn
+[1] 1 2 3 4 5
+A source of confusion is the difference between a zero length character vector and the empty string.
+> character()
+character(0)
+> length(character())
+[1] 0
+> length("")
+[1] 1
+> nchar(character())
+numeric(0)
+> nchar("")
+[1] 0
+The character() object contains no strings, while "" is one string that has no characters in it.
+Recursive objects can have zero length also:
+> list()
+list()
+> length(list())
+[1] 0
+> parse(text="")
+expression()
+An object printed as NULL (mode null) is a special zero length object. An object that is numeric(0) contains nothing, but if it contained anything, the elements would be numbers. A NULL object contains nothing, and it is not specified what it would contain if it did have something. Its vacancy glitters round us everywhere. 29
+A common occurrence of NULL is as the result of the extraction from a list of a component that doesn’t exist.
+> jjlist
+$a:
+[1] "aaa" "aa"
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+9.3. ZERO LENGTH OBJECTS 197 $b:
+[1] "bb"  "bbb"
+$c:
+[1] "ccc" "ccc"
+> jjlist$d
+NULL
+Though it is often irrelevant, there is a difference between a component that does not exist and a component whose value is NULL.
+> jjlist[2] <- NULL # no change
+> jjlist
+$a:
+[1] "aaa" "aa"
+$b:
+[1] "bb"  "bbb"
+$c:
+[1] "ccc" "ccc"
+> jjlist[2] <- list(NULL) # change component
+> jjlist
+$a:
+[1] "aaa" "aa"
+$b: NULL
+$c:
+[1] "ccc" "ccc"
+> jjlist[[2]] <- NULL # delete component
+> jjlist
+$a:
+[1] "aaa" "aa"
+$c:
+[1] "ccc" "ccc"
+So to remove a component, use double brackets and assign NULL. To change the value of a component to NULL, use single brackets and a list whose component is NULL.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+198 CHAPTER 9. S FOR S PROGRAMMERS The fjjcylinder function returns the radius, height and volume of a cylin-
+der. Give the function any two of these, and it computes the third.
+"fjjcylinder"<-
+function(r = ((2 * V)/pi/h)^0.5, h = (2 * V)/pi/r^2, V
+{
+ = 0.5 * pi * r^2 * h)
+list(r = r, h = h, V = V)
+}
+> fjjcylinder(r=1:3, h=3.5)
+$r:
+[1] 1 2 3
+$h:
+[1] 3.5
+$V:
+[1]  5.497787 21.991149 49.480084
+> fjjcylinder(h=3.5, V=21:23)
+$r:
+[1] 1.954410 2.000402 2.045361
+$h:
+[1] 3.5
+$V:
+[1] 21 22 23
+Obviously if only one argument is given, there has to be some sort of trouble.
+> fjjcylinder(r=4)
+Error in fjjcylinder(r = 4): Recursive occurrence of
+        default argument "h"
+Dumped
+Where we’re caught is when S notices that it is being asked to resolve a circular reference. Now we look at the state of the objects at the time of the error.
+> debugger()
+Message: Recursive occurrence of default argument "h"
+1:
+2: fjjcylinder(r = 4)
+Selection: 2
+Frame of fjjcylinder(r = 4)
+d(2)> ?
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+9.3. ZERO LENGTH OBJECTS 199
+1: V
+2: h
+3: r
+d(2)> mode(r)
+[1] "numeric"
+d(2)> mode(h)
+[1] "unknown"
+d(2)> mode(V)
+[1] "unknown"
+d(2)> missing(r)
+[1] F
+d(2)> missing(h)
+[1] T
+d(2)> missing(V)
+[1] T
+Note that not all versions of S (or S-PLUS) will give you the same answers in this example.
+There are really two senses of what a missing object is. The first and most proper is that it is an object that corresponds to an argument of a function that was not given in the call. For example, the call fjjcylinder(r=4) means that h and V will be missing.
+The second sense is that “missing” means an object of mode missing. Here is a little test case:
+> fjjtestmiss1
+function(x, y, z)
+{
+        ans <- logical(3)
+        names(ans) <- c("x", "y", "z")
+        ans2 <- ans
+        ans["x"] <- missing(x)
+        ans["y"] <- missing(y)
+        ans["z"] <- missing(z)
+        mode(y) <- "missing"
+        ans2["x"] <- missing(x)
+        ans2["y"] <- missing(y)
+        ans2["z"] <- missing(z)
+        list(before = ans, after = ans2, call =
+                match.call())
+}
+> fjjtestmiss1(1,2)
+$before:
+xyz FFT
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+200 CHAPTER 9. S FOR S PROGRAMMERS
+$after: xyz FTT
+$call:
+fjjtestmiss1(x = 1, y = 2)
+> fjjtestmiss1()
+Error in fjjtestmiss1: Argument "y" is missing, with no
+        default: fjjtestmiss1()
+Dumped
+So you can not make a missing argument missing. The proper approach is:
+> fjjtestmiss2
+function(x, y, z)
+{
+}
+ans <- logical(3)
+names(ans) <- c("x", "y", "z")
+ans2 <- ans
+ans["x"] <- missing(x)
+ans["y"] <- missing(y)
+ans["z"] <- missing(z)
+if(!missing(y))
+        mode(y) <- "missing"
+ans2["x"] <- missing(x)
+ans2["y"] <- missing(y)
+ans2["z"] <- missing(z)
+list(before = ans, after = ans2, call =
+        match.call())
+I’m not sure why you would ever want to do such a thing, but it appeals to my sense of irony.
+A mode of unknown means that S is left confused about the situation, as in the fjjcylinder(r=4) call where V can’t be computed. Nobody knew where I was and now I am no longer there. 30
+There is a way to make a constraint-based function like fjjcylinder behave better.
+"cylinder"<-
+function(r = ((2 * V)/pi/h)^0.5, h = (2 * V)/pi/r^2, V
+{
+ = 0.5 * pi * r^2 * h)
+if(nargs() != 2)
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+9.4. MODES
+201
+}
+        stop("must give exactly two arguments"
+                )
+list(r = r, h = h, V = V)
+The nargs function returns the number of arguments that are actually passed into the call for the function it is in. We know in this case that we need exactly two arguments. We could allow all three arguments to be given, and perform some sort of adjustment to make the three quantities follow the constraint.
+> cylinder(r=4)
+Error in cylinder(r = 4): must give exactly two arguments
+Dumped
+This is a more rational error message than that from fjjcylinder. 9.4 Modes
+There are numerous modes, each producing a different type of object. The modes are divided into three categories: atomic, recursive and language. Atomic (which includes mode null as well as those given in chapter 1) does not overlap with the other two categories. Recursive objects may contain other objects of the same mode. Some language objects are recursive.
+Although not a mode, “structures” are a way that objects are described. The structure function has a .Data argument and takes an arbitrary number of additional arguments. These additional arguments are the attributes of the object. Here are some examples:
+> dput(1:4)
+c(1, 2, 3, 4)
+> jjstruc <- 1:4
+> class(jjstruc) <- "whim"
+> dput(jjstruc)
+structure(.Data = c(1, 2, 3, 4), class = "whim")
+> jjmat <- matrix(1:4, 2)
+> dput(jjmat)
+structure(.Data = c(1, 2, 3, 4), .Dim = c(2, 2))
+> attributes(jjmat)
+$dim:
+[1] 2 2
+> jjmat2 <- 1:4
+> attr(jjmat2, ".Dim") _ c(2,2)
+> jjmat2
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+202
+     [,1] [,2]
+[1,]    1    3
+[2,]    2    4
+CHAPTER 9. S FOR S PROGRAMMERS
+So .Dim is another name for the dim attribute (due I’m sure to some sort of historical aberration). By the way, the dput function is what does the real work in the dump function.
+S functions are objects of mode function. S thinks the length of a function is the number of arguments plus one. The extra “component” is the body of the function. The names of a function are the names of the arguments, the body is not named. Since the default of an argument to a function can be a function, functions are recursive. In common usage, as on page 25, the length of a function is the number of lines contained in the body of the function.
+A special type of function is an assignment function. These are functions that appear on the “wrong” side of an assignment, for example:
+dim(x) <- c(4, 6)
+The assignment function in this case has the (invalid) name of dim<-. As- signment functions have their own protocol to follow—see the explanation of names<-.rationalnum on page 248.
+Using an assignment function may cause a local version of the object to be created. When you are at the S prompt, then the local version will be in the working database.
+> find("freeny.x")
+[1] "/usr/lang/s3.1/s/.Datasets"
+> dim(freeny.x) <- c(13, 12)
+Warning messages:
+  Invalid dimnames deleted in: dim(freeny.x) <- c(13, 12)
+> find("freeny.x")
+[1] ".Data"                      "/usr/lang/s3.1/s/.Datasets"
+When in a function, then the new copy will be in the frame of the function. Examples of this are in fjjlog2 on page 220, and loan on page 226.
+Objects of mode expression are (the equivalent of) parsed commands. This is a recursive mode since expressions can contain expressions.
+Mode call represents objects that are calls to a function. The first compo- nent of a call is the name (mode name) of the function being called. The rest of the call is the arguments given.
+> length(expression(sin(1:4)))
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+9.4. MODES 203
+[1] 1
+> mode(expression(sin(1:4))[[1]])
+[1] "call"
+> expression(sin(1:4))[[1]][[1]]
+sin
+> mode(expression(sin(1:4))[[1]][[1]])
+[1] "name"
+> expression(sin(1:4))[[1]][[2]]
+1:4
+> mode(expression(sin(1:4))[[1]][[2]])
+[1] "call"
+> mode(expression(sin(1:4))[[c(1,2,2)]])
+[1] "numeric"
+Here we see an example of a type of subscripting that was promised in chapter 1. The command
+x[[c(1,2,2)]]
+is equivalent to
+x[[1]][[2]][[2]]
+Working with language constructs is one of the more likely spots where this form of subscripting is useful. The portoptgen function on page 348 uses it extensively to build an S function. Another equivalent form is:
+x[[list(1,2,2)]]
+This allows a mixture of numeric and character subscripts.
+Formulas use the tilde operator. This operator is particularly lazy—it does nothing but return a call to itself. This seems like either a contradiction or an infinite loop, but it works nonetheless. It preserves what was typed while being in a form that can be taken apart and manipulated.
+> jjform <- y ~ x1 + x2
+> mode(jjform)
+[1] "call"
+> is.recursive(jjform)
+[1] T
+> is.language(jjform)
+[1] T
+> jjform[[1]]
+ ~
+> jjform[[2]]
+y
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+204 CHAPTER 9. S FOR S PROGRAMMERS
+> jjform[[3]][[2]]
+x1
+> jjform[[c(3,2)]]
+x1
+See the chapter on formulas for more.
+Something of mode name is in the crack between the character string that names an object, and the object itself. To stand in the doorway is to stand in more brief worlds than this one 31
+> jjform[[2]] <- as.name("z")
+> jjform
+z ~ x1 + x2
+> jjln <- list(a=0, b=as.name("freeny.y"))
+> jjln
+$a:
+[1] 0
+$b: freeny.y
+> jjln$b
+freeny.y
+> eval(jjln$b)
+           1Q      2Q      3Q      4Q
+1962:         8.79236 8.79137 8.81486
+1963: 8.81301 8.90751 8.93673 8.96161
+1964: 8.96044 9.00868 9.03049 9.06906
+1965: 9.05871 9.10698 9.12685 9.17096
+1966: 9.18665 9.23823 9.26487 9.28436
+1967: 9.31378 9.35025 9.35835 9.39767
+1968: 9.42150 9.44223 9.48721 9.52374
+1969: 9.53980 9.58123 9.60048 9.64496
+1970: 9.64390 9.69405 9.69958 9.68683
+1971: 9.71774 9.74924 9.77536 9.79424
+Names are elusive because they are almost always evaluated.
+There are several modes that control flow within the language. These modes
+include: if, for, while, repeat, return, break, and next.
+> jjif <- expression(if(x>0) y else z)[[1]]
+> jjif
+if(x > 0) y else z
+> mode(jjif)
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+9.4. MODES 205
+[1] "if"
+> length(jjif)
+[1] 3
+> is.recursive(jjif) [1] T
+> is.language(jjif) [1] T
+> jjif[[1]]
+x>0
+> mode(jjif[[1]]) [1] "call"
+So an if object has length 3 (2 when the “else” is missing) and each piece is usually some other language object. Here we see how an if without an else works:
+> rm(jj, jjx)
+> jj <- 1
+> jjx <- if(jj == 0) 3
+> jjx
+NULL
+> rm(jjx)
+> if(jj == 0) jjx <- 3
+NULL
+> jjx
+Error: Object "jjx" not found
+The value of the else clause when it is missing is NULL. In the second statement above the assignment to jjx is not made so it doesn’t exist rather than having the value NULL as in the first statement.
+> jjbrk <- vector("break")
+> jjbrk
+break
+> is.recursive(jjbrk)
+[1] F
+> is.atomic(jjbrk)
+[1] F
+> is.language(jjbrk)
+[1] T
+> length(jjbrk)
+[1] 0
+So an object of mode break is neither recursive nor atomic.
+See the find.assign function on page 211 for a couple additional modes,
+and to see language modes in action.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+206 CHAPTER 9. S FOR S PROGRAMMERS 9.5 Evaluation
+The first step S takes in order to perform a command is to parse it. This is the process of breaking the command into units of known type. Consider the pseudo-English sentence “The wugbun was quentled in the nebrad pebfin.” We parse this by realizing that “wugbun” is a noun and the subject of the sentence; “quentled” is a verb in the past tense of the passive voice; “nebrad” is an adjective modifying “pebfin” which is a noun and the object of the preposition “in.” We don’t know what these words mean, but that doesn’t hinder us from understanding the form of the sentence. Learning what the words mean and then understanding the sentence would be analogous to evaluation in S. I can’t blab such blither blubber. 32
+When S parses a statement, it looks at each character in turn and tries to make sense of it. If it sees ! as the first character, then it interprets this as an escape to the operating system, but if it sees it only later in a statement, then it tries to fit it into one of the operators != or ! (meaning “not”). S decides what are numbers and what are object names. If at some point, the parser can’t fit a character in sensibly, then a syntax error results. Here are two statements:
+f (a,b) f + (a, b)
+They are exactly alike except for the third character. The first statement will parse fine. The second statement will parse okay through the “a”, but when it hits the comma, it realizes there is a problem—the parenthesis can’t be thought of as the start of an argument list because of the + operator, and argument separation is the only use in S that a comma has.
+> parse(text="f + (a, b)")
+Syntax error: "," used illegally at this point:
+f + (a,
+Dumped
+There is no problem making objects with new names, but the parser would not understand it if you tried to create new operators at whim. You can not add, say, ++ as a new operator because that would change the syntax of the language.
+> ++2
+[1] 2
+> +-++2
+[1] -2
+> 3//5
+Syntax error: */ ("/") used illegally at this point:
+3//
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+9.5. EVALUATION 207 Using ++ in S does parse—it is interpreted as two unary plus signs in a row.
+There is no interpretation for something like // so a syntax error results.
+However, S provides a way to add new operators, but the name of the oper- ator must begin and end in %. Here is a list of all such operators from S-PLUS version 3.3.
+> find.objects("%")
+ $SHOME/s/.Functions $SHOME/splus/.Functions
+ "%%"                "%*%"
+ $SHOME/splus/.Functions $SHOME/s/.Functions
+ "%*%.default"           "%/%"
+ $SHOME/s/.Functions
+ "%o%"
+The %*% function is generic with only a default method appearing here.
+The characters that appear inside the % symbols are quite arbitrary. The following operator even contains a pound sign that elsewhere would signal the start of a comment. (Quotes are not allowed.)
+> "%@#&*#%" <- function(e1, e2) rpois(e1, e2)
+> 3 %@#&*#% 5
+[1] 3 5 2
+Below is the definition of an “element of” operator that might be of use at times.
+> "%e%" <- function(x,y) match(x, y, nomatch=0) > 0
+> c(-1, 34, 2) %e% 1:10
+[1] F F T
+> 1:10 %e% c(-1, 34, 2)
+ [1] F T F F F F F F F F
+Statisticians looking at the list of operators may be wondering why %in% that is used in analysis of variance formulas is not listed. The functionality is there:
+> raov(Moisture ~ Batch + Sample %in% Batch, pigment)
+Call:
+   raov(formula = Moisture ~ Batch + Sample %in% Batch,
+        data = pigment)
+Terms:
+ Sum of Squares 1210.933           869.750    27.500
+Batch Sample %in% Batch Residuals
+Deg. of Freedom       14                15
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+30
+
+208 CHAPTER 9. S FOR S PROGRAMMERS Residual standard error: 0.9574271
+Estimated effects are balanced
+The %in% is not really a function, likewise the + in the formula is not really addition. Formulas use S parsing (so the precedence in formulas is the same as in S commands), but the formulas are not evaluated in S.
+In the evaluation process, S creates a memory frame (also called an evalua- tion frame) for each function call as it is evaluated. Actually, since this is the chapter where I’m promising to tell the truth, I have to state that there are “quick calls” (which are .Internal functions satisfying certain conditions) that do not get their own frame. We Thin gin. We Jazz June. 33
+As a function is evaluated, functions called within that function need to be evaluated, and functions within those functions need to be evaluated, and so on. Hence there is a stack of memory frames that grows and shrinks throughout the evaluation. Each of the frames has a unique number which gives the depth it is in the stack.
+Below are some examples of frames shown by traceback from a call to browser. The function called on the command line will be:
+> fjj4
+function(x, add.new = F, exp.use = F)
+{
+}
+char.logic <- paste(add.new, exp.use, sep =
+        ".")
+switch(char.logic,
+        FALSE.FALSE = log(fjjb(x) + 3),
+        FALSE.TRUE = exp(fjjb(x) + 3),
+        TRUE.FALSE = log(fjjb(x) %+% 3),
+        TRUE.TRUE = exp(fjjb(x) %+% 3))
+CODE NOTE. The char.logic variable provides a mechanism for flattening out a messy nest of “if-else”s. In this case where it is only two deep, it is perhaps a little gratuitous, but with more nesting, it can be very aesthetic, especially if a portion of code corresponds to more than one case.
+Functions used by fjj4 include:
+> fjjb
+function(x, y = 2)
+{
+browser() x+y
+}
+> get("%+%")
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+9.5. EVALUATION 209 function(e1, e2)
+{ }
+.Internal(e1 + e2, "do_op", T, 5)
+The %+% operator is the same as the + operator except that the former has braces around the call to .Internal.
+> fjj4(5)
+Called from: fjjb(x)
+b(4)> traceback()
+7: eval(i, eval.frame, parent) from 6
+6: browser.default(nframe, message = paste("Called from:", from 5
+5: browser() from 4
+4: fjjb(x) from 2
+3: log(fjjb(x) + 3) from 2
+2: fjj4(5) from 1
+1:  from 1
+b(4)> 0
+[1] 2.302585
+> fjj4(5, add=T)
+Called from: fjjb(x)
+b(5)> traceback()
+8: eval(i, eval.frame, parent) from 7
+7: browser.default(nframe, message = paste("Called from:", from 6
+6: browser() from 5
+5: fjjb(x) from 2
+4: fjjb(x) %+% 3 from 2
+3: log(fjjb(x) %+% 3) from 2
+2: fjj4(5, add = T) from 1
+1:  from 1
+b(5)> 0
+[1] 2.302585
+> fjj4(5, T, T)
+Called from: fjjb(x)
+b(4)> traceback()
+7: eval(i, eval.frame, parent) from 6
+6: browser.default(nframe, message = paste("Called from:", from 5
+5: browser() from 4
+4: fjjb(x) from 2
+3: fjjb(x) %+% 3 from 2
+2: fjj4(5, T, T) from 1
+1:  from 1
+b(4)> 0
+[1] 22026.47
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+210 CHAPTER 9. S FOR S PROGRAMMERS
+From these tracebacks we can infer that exp and + are quick calls while log and %+% are not. When log is used, there is a frame corresponding to it, but there is never a frame for exp.
+The number after the “from” gives the frame number of the parent of each frame. Frame 1 has the curious property of being its own parent.
+When S looks for a an object, it looks in a number of places until it finds an object that satisfies the requirements. Often S knows that it needs a function so it will ignore objects with the same name that are not functions (it gives a warning if this happens). The places searched are:
+• The first place S looks is the current frame.
+• The second place where it looks is a funny critter called frame 1. Frame 1 is best explained as lasting from the start of a command being evaluated until the prompt returns. Note that not all frames are searched.
+• The third place to look is database 0, also referred to as frame 0, the session database or the session frame—so many names for one place. Database 0 starts when an S session starts and dies when S is exited.
+• Finally each database on the search list is searched in turn.
+• If the object is not found in any of these places, then an error occurs.
+Frame 1 is generally underused. When a variable needs to be global, this is almost always the location where it should be put. You want the variable to live only as long as required. If it will only be used during a function call, then it should go into frame 1. If it needs to outlive a single function call, but can be logically or conveniently recreated each session, then it should go into database 0. Only when the variable needs to live beyond a single session, should it go into the working database.
+The whence function returns the location where an object is found. It first looks for the appropriate object in the memory frame of interest, then in frame 1, then in database 0, then on the search list. A negative return value means that the object is found in a frame.
+"whence"<-
+function(x, mode. = "any", offset = 0)
+{
+        if(!is.character(x) || length(x) != 1)
+                stop("need single character string for x")
+        parent <- sys.parent() - offset
+        if(exists(x, mode = mode., frame = parent))
+                return( - parent)
+        if(exists(x, mode = mode., frame = 1))
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+9.5. EVALUATION 211
+                return(-1)
+        if(exists(x, mode = mode., frame = 0))
+                return(0)
+        find(x, mode = mode., numeric = T)[1]
+}
+The whence function is used on page 228 in the [.stack function.
+The find.assign function takes an expression and attempts to return all of the variables that are assigned to in the expression.
+"find.assign"<-
+function(line)
+{
+        switch(mode(line),
+                "<-" = ,
+                "<<-" = {
+                        ans <- line[[1]]
+                        if(mode(ans) == "call")
+                                return(character(0))
+                        else if(mode(line[[2]]) == "function") {
+                                this.fun <- line[[2]]
+                                return(c(ans, names(this.fun)[ - length(
+                                  this.fun)], Recall(this.fun[[length(this.fun)
+                                  ]])))
+                        }
+                        else if(mode(line[[2]]) == "<-" || mode(line[[2]]) ==
+                                "<<-") {
+                                return(c(ans, Recall(line[[2]])))
+                        }
+                        else return(as.character(ans))
+                }
+                ,
+                comment.expression = return(Recall(line[[1]])),
+                "{" = {
+                        ans <- character(0)
+                        for(i in 1:length(line)) {
+                                ans <- c(ans, Recall(line[[i]]))
+                        return(ans)
+                }
+                ,
+                "if" = return(c(Recall(line[[1]]), Recall(line[[2]]), Recall(
+                        line[[3]]))),
+                "while" = {
+                        return(c(Recall(line[[1]]), Recall(line[[2]])))
+}
+,
+"for" = {
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+}
+
+212
+CHAPTER 9. S FOR S PROGRAMMERS
+        loopv <- substring(deparse(line)[1], 5)
+        loopv <- substring(loopv, 1, match(32, AsciiToInt(loopv
+                )) - 1)
+        return(c(loopv, Recall(line[[3]])))
+}
+,
+"repeat" = return(Recall(line[[1]])),
+call = {
+}
+} )
+cnam <- as.character(line[[1]])
+switch(cnam,
+        assign = return(line[[2]]),
+        switch = {
+          ans <- character(0)
+          for(i in 2:length(line)) {
+            ans <- c(ans, Recall(line[[i]]))
+          }
+          return(ans)
+        }
+        ,
+        return(character(0)))
+The basic idea of this function is dead simple—switch on the mode of the output, then recurse on pieces of the input using Recall (see page 239 for further explanation of Recall and recursion). The details can get a little messy, though.
+Although writing find.assign is a fine exercise to understand S, its real purpose is as a subfunction to global.vars which attempts to return the vari- ables that are global to a function. A mistake that is easy to make is to use a different name in the body of a function than in the argument list for the same variable. For example:
+> global.vars(function(xmat) symsqrt(x))
+[1] "x"
+This makes the misspelled name in the body a global variable. The situation is particularly dangerous when there is an object of that name on the search list—possibly created for debugging purposes. The global.vars function is an attempt to have a diagnostic for this.
+"global.vars"<-
+function(fun)
+{
+        if(is.character(fun))
+                fun <- get(fun)
+        fnam <- names(fun)
+        fnam <- fnam[ - length(fnam)]
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+9.5. EVALUATION 213
+        allv <- all.vars(fun, uniq = T)
+        allv <- allv[!match(allv, c("NA", "T", "F",
+                "Inf", "NULL", ".Internal", fnam),
+                nomatch = 0)]
+        body <- fun[[length(fun)]]
+        if(mode(body) == "{") {
+                anam <- character(0)
+                for(i in 1:length(body)) {
+                        anam <- c(anam, find.assign(
+body[[i]]))
+} }
+        else anam <- character(0)
+        if(length(anam))
+                allv <- allv[ - match(anam, allv,
+                        nomatch = 0)]
+allv
+The all.vars function returns a vector of all of the variables in an expression, in this case we want just the unique names rather than each occurence of a name. Next we get rid of the common names we know are wrong and the argument names. Finally we get rid of the names that are assigned to in the body of the function.
+If you’ve been paying attention you should be a little concerned about this last move—on page 72 I said there was a problem with subscripting with nega- tive numbers from match. But given the protection for the length of anam, there will be at least one match if that line of code is reached, so it should be fine.
+S uses lazy evaluation. This means that arguments to functions are eval- uated only when they are actually needed. Being used by another function doesn’t count—the object is passed into the call unevaluated. Once the value is needed, it is evaluated in the appropriate frame and the value is effectively passed to all of the intermediate frames. An advantage of lazy evaluation is that unnecessary evaluation is avoided. Another is that the default to an argu- ment can involve variables created inside the function as long as the variables exist by the time that the argument is needed. The down-side is that in certain situations there are problems with knowing where the evaluation should take place. The most common way to get this problem is when using formulas in- side of functions—see page 291. The delay.eval function on page 217 slightly illuminates lazy evaluation.
+S is essentially a functional language, which means that variables in one function are not changed by functions called by the function. That is, side effects are minimized, and generally only occur in a limited set of circumstances.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+}
+
+214 CHAPTER 9. S FOR S PROGRAMMERS Actually, it is possible with the assign function to change objects in other
+frames (one reason why S is not strictly a functional language).
+When objects are assigned to databases, they are not actually written to the disk until just before S gives another prompt. The assignments are said not to be committed until the prompt is given. For the most part, this is of no concern, but there are times when it matters. Instances where it does matter include large, repetitive computations (page 355), and browser calls (page 138). The immediate argument to assign insures that the commitment is made at the time of evaluation rather than held until later. See also the discussion of synchronize on page 103.
+There is a number of functions that provide information on the stack of memory frames at a given moment. Here is a list of them:
+> objects(5, pat="^sys")
+ [1] "sys.call"     "sys.calls"    "sys.frame"
+ [4] "sys.frames"   "sys.function" "sys.nframe"
+ [7] "sys.on.exit"  "sys.parent"   "sys.parents"
+[10] "sys.status" "sys.trace"
+We can use the fjj4 function again to explore what some of these functions
+do.
+> fjj4(6)
+Called from: fjjb(x)
+b(4)> traceback()
+7: eval(i, eval.frame, parent) from 6
+6: browser.default(nframe, message = paste("Called from:", from 5
+5: browser() from 4
+4: fjjb(x) from 2
+3: log(fjjb(x) + 3) from 2
+2: fjj4(6) from 1
+1:  from 1
+b(4)> sys.nframe()
+[1] 4
+b(4)> sys.parent()
+[1] 2
+Although it is a little confusing with the browser complicating things, we get the answer that we are in frame number 4 and the parent to frame 4 is frame 2.
+b(4)> sys.call()
+fjjb(x)
+b(4)> sys.frame()
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+9.5. EVALUATION 215 $.Auto.print:
+[1] T
+$x:
+.Argument(x, x = )
+$y:
+.Argument(, y = 2)
+b(4)> sys.function()
+function(x, y = 2)
+{
+browser() x+y
+}
+The .Argument (which is a mode) objects are unevaluated arguments to the
+function.
+b(4)> sys.parents()
+[1] 1 1 2 2 4 5 6 4
+sys.call is a close synonym of match.call. Either of them can be used to pro- duce the call component or attribute of the results of functions. The difference is that match.call always gives the argument name:
+> fjj5
+function(x)
+{
+        match.call()
+}
+> fjj6
+function(x)
+{
+sys.call()
+}
+> fjj5(y ~ x+z)
+fjj5(x = y ~ x + z)
+> fjj6(y ~ x+z)
+fjj6(y ~ x + z)
+The ignore.error function allows a value to be given to a computation that produces an error, and the computation continues. This function provides an example of how to control evaluation as well as introducing the restart function.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+216 CHAPTER 9. S FOR S PROGRAMMERS
+"ignore.error"<-
+function(call, value = NULL)
+{
+}
+nframe <- sys.nframe()
+flag <- paste("flag.ignorE.error", nframe, sep = ".")
+if(exists(flag, frame = 1) && get(flag, frame = 1)) {
+        assign(flag, F, frame = 1)
+        cat("(ignored)\n", file = "|stderr")
+        return(value)
+}
+else assign(flag, T, frame = 1)
+restart(T)
+ans <- eval(call, nframe - 1)
+assign(flag, F, frame = 1)
+ans
+Let’s go through the execution of this function. We start by finding where we are in the stack of frames. Next the variable name for the flag is created—the funny capitalization helps to avoid name conflicts, but the important part is the frame number in case ignore.error is called in more than one level. If the flag exists and is TRUE, then the flag is changed to FALSE, the error message is appended, and the function exits with the return value. Otherwise the flag is assigned to be TRUE, and restart is called so that evaluation will resume after an error. Now finally, the actual statement of interest is evaluated in the proper frame. If no error occurs, then evaluation within ignore.error continues—the flag is turned to FALSE and the result is returned. If an error does occur, then the restart causes evaluation to resume at the beginning of the ignore.error call which means that the condition in the if will be TRUE. Note that you may be in for a wild ride if you use a function containing restart that is not properly debugged.
+Below is a function that uses ignore.error and an example of its use. When ignore.error is used, it is reasonable to set the error option to NULL to save time.
+"fjjigerr"<-
+function(input)
+{
+        this.mat <- base.mat <- matrix(c(2, 1, 1, 1),
+                2)
+        lin <- length(input)
+        ans <- array(NA, c(lin, 2), list(input, NULL))
+        for(i in 1:lin) {
+                this.mat[4] <- base.mat[4]/input[i]
+                ans[i,  ] <- ignore.error(eigen(
+                        this.mat)$val, NA)
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+9.5. EVALUATION 217
+}
+ans }
+> fjjigerr(-2:1)
+Error in eigen.default(this.mat): missing or infinite
+values in x
+Dumped
+(ignored)
+       [,1]       [,2]
+-2 2.350781 -0.8507811
+-1 2.302776 -1.3027756
+ 0       NA         NA
+ 1 2.618034  0.3819660
+The for loop in fjjigerr uses 1:lin where lin is length(input). There is no assurance that input will have a length, so the loop might fail—see page 128. In this case it isn’t tragic since it is just a temporary function, and it will fail on array anyway. However, it is good to keep these things in mind for when they do count.
+The delay.eval function plays on lazy evaluation to allow evaluation to be performed in a different memory frame than usual.
+"delay.eval"<-
+function(expr, frames = 1)
+{
+        eval(substitute(expr), local = sys.parent() + frames)
+}
+For example, the default value for ncol.arg in diag.default is n. The n is local to diag.default and not part of the environment of the frame calling diag.default. We can use the n inside a call to delay.eval though.
+> args(diag.default)
+function(x = 1, nrow.arg, ncol.arg = n)
+NULL
+> diag(1, nrow=3, ncol=2*n)
+Error: Object "n" not found
+Dumped
+> diag(1, nrow=3, ncol=delay.eval(2*n))
+     [,1] [,2] [,3] [,4] [,5] [,6]
+[1,]    1    0    0    0    0    0
+[2,]    0    1    0    0    0    0
+[3,]    0    0    1    0    0    0
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+218 CHAPTER 9. S FOR S PROGRAMMERS
+The unabbrev.value function is meant to allow an abbreviated function argument. That is, the argument can be one of a few strings that would need to be given in full without some mechanism like this.
+"unabbrev.value"<-
+function(x, choices)
+{
+        err <- F
+        if(!is.character(x) || length(x) != 1) {
+} }
+}
+else {
+err <- T
+emsg <- paste("need single character string for",
+        deparse(substitute(x)))
+xnum <- pmatch(x, choices, nomatch = 0
+        )
+if(xnum == 0) {
+        err <- T
+        emsg <- paste(
+                "unknown or ambiguous choice for ",
+                deparse(substitute(x)),
+                ": ", x, sep = "")
+} }
+if(err) {
+        eval(call("stop", emsg), local =
+                sys.parent())
+else choices[xnum]
+A particular feature of this function is that the error message contained in emsg—if err is TRUE—will come from the function with the argument, not from unabbrev.value.
+An example of the use of this function is in line.integral on page 320.
+The .Internal function calls C code that is specially written to understand S. You can not write your own .Internal functions, and you can not have access to the code that they use. However, a brief explanation of a .Internal call might help you sometime. Here is an example:
+> get("*")
+function(e1, e2)
+.Internal(e1 * e2, "do_op", T, 4)
+The .Internal function has four arguments. The first argument is an image of how the call must have looked, with appropriate substitutions made. S uses
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+9.5. EVALUATION 219
+this image internally—it is more than cosmetic. The second argument names the section of internal S code that is to be used, and the fourth argument is the specific part of that section that is to be used. For example, the * function uses case 4 of the do op code. The second argument is of significance relative to the groups of the object-oriented programming. The third argument is a logical value which states whether the arguments are to be evaluated or not. One might think that arguments should always be evaluated, but then one would be wrong.
+Options are implemented by using the .Options object that lives in database 0. This is a logical place for it since it must have persistence, but it is easily created and modified appropriately as S starts up. The .Options object is a named list where the name is the option and the component is the value of the option. For almost all purposes, you should only change options through the options function (or a modification like soptions given on page 45). If this were always the case, then there would be no reason to care how options are implemented. However there are a few occasions where finesse is desirable.
+Here is a revision of the log function so that a warning is not given when negative numbers are given to it.
+> fjjlog1
+function(...)
+{
+        on.exit(options(old.opt))
+        old.opt <- options(warn = -1)
+        log(...)
+}
+Now we test that it works and time it relative to the original.
+> fjjlog1(-4:4)
+[1]        NA        NA        NA        NA      -Inf
+[6] 0.0000000 0.6931472 1.0986123 1.3862944
+> unix.time(for(i in 1:1000) fjjlog1(-4:4))
+[1] 101.42   2.39 106.00   0.00   0.00
+> unix.time(for(i in 1:1000) log(-4:4))
+[1] 0.94000244 0.01999998 1.00000000 0.00000000
+[5] 0.00000000
+There were 50 warnings (use warnings() to see them)
+If we had to put up with this much loss of speed, then we might well be happier with the warnings. (Note there were really 1000 warnings, but S saved only the first 50 of them.) But a different revision performs much better:
+> unix.time(for(i in 1:1000) fjjlog2(-4:4))
+[1] 3.22000122 0.02999973 3.00000000 0.00000000
+[5] 0.00000000
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+￼
+220 CHAPTER 9. S FOR S PROGRAMMERS The revised function is:
+> fjjlog2
+function(...)
+{
+        .Options$warn <- -1
+        log(...)
+}
+This creates a local version of .Options with the change to warn.
+version of the .Options object is created due to the action of the $<- function. There is no need of on.exit because the local version will die when fjjlog2 exits.
+When you type the name of an object at an S prompt, the object is printed. A simple and logical idea, but it is a little bit complicated to implement because not everything is printed. There is a special object named .Auto.print that controls automatic printing. Suppose that we want to time a statement:
+> unix.time(mean(rnorm(100)))
+[1] 0.00999999 0.00999999 0.00000000 0.00000000 0.00000000
+The statement above gives us the timing, but we don’t get to see the result of the computation. We need a call to print around the statement being timed in order to see its result:
+> unix.time(print(mean(rnorm(100))))
+[1] 0.02105694
+Now we see the result of the statement, but not the timing. The reason is that the last statement of print methods is invisible(x) so that the object being printed is returned but there can’t be an infinite loop of printing. That call to invisible has set .Auto.print in frame 1 to FALSE so at the point that unix.time exits, automatic printing is not in effect. To see both results, we need two calls to print:
+> print(unix.time(print(mean(rnorm(100)))))
+[1] 0.2123258
+[1] 0.00999999 0.00000000 0.00000000 0.00000000 0.00000000
+Here is the definition of the interlude function whose use was explained on page 59.
+"interlude"<-
+function(x)
+{
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+The new
+
+9.5. EVALUATION 221
+}
+if(!is.character(x))
+        x <- deparse(substitute(x))
+if(exists(".Interlude", where = 0))
+        ilist <- get(".Interlude", where = 0)
+else {
+        ilist <- list(0)
+        class(ilist) <- "interlude"
+}
+onelist <- list(total.time = rep(0, 5), ncalls = 0)
+iexpr <- expression(NULL, on.exit({
+        .interludE.final <- proc.time()
+        if(length(.interludE.init) == 3)
+                .interludE.init <- c(.interludE.init, 0, 0)
+        if(length(.interludE.final) == 3)
+                .interludE.final <- c(.interludE.final, 0, 0)
+        .interludE.list <- get(".Interlude", where = 0)
+        .interludE.thisl <- .interludE.list[[.interludE.name]]
+        .interludE.thisl$total.time <- .interludE.thisl$total.time + (
+                .interludE.final - .interludE.init)
+        .interludE.thisl$ncalls <- .interludE.thisl$ncalls + 1
+        .interludE.list[[.interludE.name]] <- .interludE.thisl
+        assign(".Interlude", .interludE.list, where = 0)
+}
+), .interludE.init <- proc.time(), NULL)
+mode(iexpr) <- "{"
+lenex <- length(iexpr)
+makefun <- rep(T, length(x))
+names(makefun) <- x
+if(length(old <- intersect(names(ilist), x)))
+        makefun[old] <- F
+for(i in x) {
+        ilist[[i]] <- onelist
+        if(makefun[i]) {
+} }
+thisfun <- get(i)
+thisn <- length(thisfun)
+thisbody <- iexpr
+thisbody[[1]] <- substitute(.interludE.name <- iname,
+        list(iname = i))
+thisbody[[lenex]] <- thisfun[[thisn]]
+thisfun[[thisn]] <- thisbody
+assign(i, thisfun, where = 0)
+assign(".Interlude", ilist, where = 0)
+Let’s start at the bottom and work towards the top. The last thing that interlude does is to assign .Interlude to the session database. This object is a list in which each component holds the time and number of calls for each of the functions being profiled.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+222 CHAPTER 9. S FOR S PROGRAMMERS
+Now look at the for loop—this loops over each function to be profiled. The first thing is to initialize the proper component of the list that will become .Interlude. The next thing to do is to modify the function to be profiled if necessary and assign the modified function to the session database.
+Modifying the existing function is done by creating an object of mode “brace”, then filling this object in with the name of the function being modified, and with the body of the real function (remember that the last component of a function is its body—the previous components are its arguments).
+Here is an example of a function after interlude has gotten hold of it.
+> sqrt
+function(x)
+x^0.5
+> interlude(sqrt)
+Warning messages:
+  assigning "sqrt" on database 0 masks an object of
+        the same name on database 5
+> sqrt
+function(x)
+{
+        .interludE.name <- "sqrt"
+        on.exit({
+} )
+.interludE.final <- proc.time()
+if(length(.interludE.init) == 3)
+        .interludE.init <- c(
+                .interludE.init, 0, 0)
+if(length(.interludE.final) == 3)
+        .interludE.final <- c(
+                .interludE.final, 0, 0)
+.interludE.list <- get(".Interlude",
+        where = 0)
+.interludE.thisl <- .interludE.list[[
+        .interludE.name]]
+.interludE.thisl$total.time <-
+        .interludE.thisl$total.time + (
+        .interludE.final -
+        .interludE.init)
+.interludE.thisl$ncalls <-
+        .interludE.thisl$ncalls + 1
+.interludE.list[[.interludE.name]] <-
+        .interludE.thisl
+assign(".Interlude", .interludE.list,
+        where = 0)
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+9.6. OBJECT-ORIENTED PROGRAMMING 223 .interludE.init <- proc.time()
+x^0.5
+}
+So the usual function has just the last line of the modified function. There are three new commands in the function: the name of the function is captured, an on.exit call with a bunch of commands in it, and the current time is captured. (The proc.time function contains the current amount of time that the S session has consumed; so we get how much time the function uses by subtracting the result of proc.time at the beginning from the result at the end.)
+More of this sort of function modification is exhibited in the section on Lagrange interpolation starting on page 322.
+The .Program object controls what S does with the expressions that it gets. The in-built .Program essentially parses then evaluates the expressions (plus some other details like deciding what to print). You can use your own .Program if you like. This is a bit like putting a new foundation under S, and is not something that everyone will want to do.
+Signals are a way to get a program to change its behavior while it is running. Although it is possible to change the keystrokes for signals initiated by the user, I will refer to them by their common mappings. The signals are sent by holding down the “control” key and hitting another character. The most common signals in Unix are control-c (interrupt), control-backslash (a stronger interrupt), control-d (a quit signal), and control-z (background).
+Use control-c to stop an S command and get back to the prompt. Control- backslash is used in S to immediately exit from a call to browser (or debugger) and get back to the S prompt. Use control-backslash when you are at a browser prompt and you want to get back to an S prompt rather than have the function continue. You probably won’t want to hit control-backslash twice since the second signal will carry you from the S prompt to the Unix prompt. In contrast control-c will leave you at an S prompt if you are at one already, and will leave you at a browser prompt if that’s where you are. It is a Unix convention that control-d will exit you from a program—S follows that convention. Control-d is equivalent to the S command q().
+There are other types of signals that are initiated by programs; examples are floating point exceptions and segmentation violations.
+9.6 Object-Oriented Programming
+The UseMethod function is the key ingredient of a generic function. Often a call to UseMethod is the entire body of the function. Typically it is the class of the first argument which controls the method that will be dispatched. Almost all generic functions look like:
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+224 CHAPTER 9. S FOR S PROGRAMMERS
+> cavort
+function(x, ...)
+UseMethod("cavort")
+The first argument to UseMethod is the name of the generic function. Although this is optional, it is good form to include it. It is especially important to give the generic name when the name includes a period—there could be ambiguity of the method to use otherwise. Another use of this argument is to allow nicknames for the generic function. An example is:
+> residuals
+function(object, ...)
+UseMethod("residuals")
+> resid
+function(object, ...)
+UseMethod("residuals")
+If you want an argument other than the first to be the one whose class controls the generic function, then the name of the argument needs to be given as the second argument to UseMethod.
+> gambol
+function(x, y, z, ...)
+UseMethod("gambol", z)
+Generic functions include UseMethod, however they need not be a bare call to UseMethod. Perhaps the simplest logical case where it isn’t is:
+"%myop%" <-
+function(x, y)
+if(length(class(x)))
+     UseMethod("%myop%")
+else
+     UseMethod("%myop%", y)
+This defines a generic operator where it first checks to see if it can dispatch using x and if not, it dispatches using y. Version 4 of S will change what you want to do here.
+The %myop% function violates the rule that a generic function should always have the three-dots as an argument, but there is no point as long as it is always used as an operator.
+A look with browser in the frame of a generic function reveals some new ob jects.
+> gambol(2,4,jjz)
+Called from: gambol.foo(2, 4, jjz)
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+9.6. OBJECT-ORIENTED PROGRAMMING 225
+b(2)> ?
+1: .Class
+2: .Method
+3: .Group
+4: z
+5: .Generic
+6: x
+7: y
+8: z
+b(2)> .Class
+[1] "foo"
+b(2)> .Method
+[1] "gambol.foo"
+b(2)> .Group
+[1] ""
+b(2)> .Generic
+[1] "gambol"
+The objects .Class, .Method,
+formation that may be necessary during evaluation. The .Generic and .Method objects are self-explanatory. The .Class object gives the classes, including the present one, that may be of use. In the case below, the "bar" class of the input is not used because there is no method corresponding to that class.
+> gambol(2, 5, jjzb)
+Called from: gambol.foo(2, 5, jjzb)
+b(2)> .Class
+[1] "foo" "zax"
+b(2)> class(z)
+[1] "bar" "foo" "zax"
+Groups provide a labor saving mechanism by allowing the programmer to write a single method for a number of generic functions. The useful groups are “Math”, “Summary” and “Ops”. The Math functions include the trigonometric functions, gamma and so on. The Summary functions are all, any, max, min, prod, range and sum. The Ops are the operators like addition and subtraction. See the Math example with rational numbers on page 252 for a look at using group methods.
+I’ve been lying to you again. Although all of the generic functions that you write will use UseMethod, functions that are a call to .Internal are also generic. (Each group consists of the functions that call the same routine in their .Internal.) So you can write a dim.foo function which will be used as a method of dim for class foo even though dim is not obviously generic. These functions are called internal generic functions.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+.Group and .Generic keep track of all of the in-
+
+226 CHAPTER 9. S FOR S PROGRAMMERS
+For the most part, methods have no distinguishing features—they look like ordinary functions. An exception is that NextMethod may be used in a method. As it’s name implies, Nextmethod is synonymous with the next method available for the generic function. I have seldom found NextMethod useful, though there is an example of its use on page 252. Do note that the names of arguments in methods should be the same as those in the generic function, as described on page 128.
+Inheritance is the part of object-orientation that allows you to build on top of existing classes. In some situations this is extremely powerful. I’m sure that some would argue that inheritance is the main point of object-orientation.
+As an example, let’s produce a “loan” object that inherits from data frames. The loan function creates an object that contains the details of the loan as it is first made.
+"loan"<-
+function(amount, rate, month, year)
+{
+}
+names(month.name) <- month.name
+ans <- data.frame(month = month.name[month],
+        year = year, principal = amount,
+        interest = as.double(NA), payment =
+        as.double(NA))
+attr(ans, "rate") <- rate
+if(is.character(month))
+        month <- pmatch(month, month.name)
+attr(ans, "last.date") <- c(month = month,
+        year = year)
+class(ans) <- c("loan", "data.frame")
+ans
+All that loan does is return a data frame that is a little bit specialized for what we want. In terms of inheritance, the key line is assigning the class to have length greater than one. Next comes a method of the update function for loan objects. The input in addition to the loan object is a vector of the next payments to be made.
+"update.loan"<-
+function(object, payment)
+{
+        last.date <- attr(object, "last.date")
+        rate <- attr(object, "rate")
+        npay <- length(payment)
+        new.month <- last.date["month"] + 1:npay
+        new.year <- (new.month - 1) %/% 12 + last.date[
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+9.6. OBJECT-ORIENTED PROGRAMMING 227
+                "year"]
+        new.month <- (new.month - 1) %% 12 + 1
+        last.prin <- object[nrow(object), "principal"]
+        new.prin <- new.inter <- numeric(npay)
+        for(i in 1:npay) {
+                new.inter[i] <- this.inter <- round((
+                        last.prin * rate)/12, 2)
+                new.prin[i] <- last.prin <- last.prin +
+                        this.inter - payment[i]
+        }
+        ans <- rbind(object, data.frame(month =
+                month.name[new.month], year = new.year,
+                principal = new.prin, interest =
+                new.inter, payment = payment))
+        attr(ans, "last.date") <- c(month = new.month[
+                npay], year = new.year[npay])
+        attr(ans, "rate") <- rate
+ans }
+With just these two functions we have everything that we really need.
+> jjl <- loan(45000, .07, 2, 1902)
+> jjl
+     month year principal interest payment
+1 February 1902     45000       NA      NA
+> update(jjl, rep(275, 5))
+     month year principal interest payment
+1 February 1902  45000.00       NA      NA
+2    March 1902  44987.50   262.50     275
+3    April 1902  44974.93   262.43     275
+4 5 6
+ May 1902  44962.28   262.35     275
+June 1902  44949.56   262.28     275
+July 1902  44936.77   262.21     275
+That inheritance comes into this, is not entirely obvious—that’s part of the power of it. We have used subscripting, rbind and print methods inherited from data frames without really noticing it. Each of those three functions is non-trivial, but we didn’t have to worry about them in our application. It would be handy to write a summary method for the loan class—the inherited method is decidedly not what we want.
+The first line of loan that puts names onto month.name allows us to use either the number of the month or (an abbreviation of) the month name.
+> loan(45000, .07, "Feb", 1902)
+     month year principal interest payment
+1 February 1902     45000       NA      NA
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+228 CHAPTER 9. S FOR S PROGRAMMERS A new version of month.name is created in the frame of loan, but after the
+function exits, the same month.name as usual will be the one seen. 9.7 Data Structures
+An important topic in computer science is data structures. Examples of useful data structures are hash tables, binary trees, and linked lists. In large measure S programmers do not need to worry about these because S already provides tools equivalent to these structures. For example, named lists or vectors can perform similar functionality to a hash table.
+Stacks are a common data structure in computer science. Below I present an implementation of stacks in S. I do this with great trepidation for two reasons. Stacks are often used because they are fundamental structures in the language and hence efficient—this is not the case here. More importantly this imple- mentation breaks the expectation about side effects in S—subscripting a stack causes it to change, which is decidedly non-standard in S. My hope is that more good will result from this example than abuse. I remain skeptical, though.
+"stack"<-
+function(length. = 64, initial = NULL, update = T)
+{
+        ans <- vector("list", length.)
+        if(size <- length(initial)) {
+                if(size > length. && is.logical(update
+                        ) && !update)
+                        stop("stack overflow")
+                ans[1:size] <- initial
+        }
+        atl <- list(class = "stack", size = size,
+                update = update)
+        attributes(ans) <- atl
+ans }
+The stack function returns an object of class stack.
+CODE NOTE. Notice that there is a dot at the end of the length. ar- gument. Without the dot, the argument name would conflict with the length function and we would get annoying warning messages. Because of partial argu- ment name matching, we can think of the argument name being length without the dot.
+The following function is the “pop”.
+"[.stack"<-
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+9.7. DATA STRUCTURES 229 function(x, i)
+{
+}
+if(!missing(i))
+        stop("only empty subscripting allowed")
+size <- attr(x, "size")
+if(!size)
+        return(NULL)
+ans <- unclass(x)[[size]]
+xname <- deparse(substitute(x))
+xloc <- whence(xname, offset = 1)
+attr(x, "size") <- size - 1
+if(xloc < 0)
+        assign(xname, x, frame = abs(xloc))
+else assign(xname, x, where = min(xloc, 1))
+ans
+This performs the unpleasant deed of assigning the changed object behind the scenes, possibly in a new location. The last item in the stack is put into ans, and the size of the stack is changed. The item is not erased from the list, though that may be a good idea for applications in which the items on the stack are large.
+The next function pushes an item onto the stack. This is a less troublesome function since a side effect is expected.
+"[<-.stack"<-
+function(x, i, value)
+{
+        if(!missing(i))
+                stop("only empty subscripting allowed")
+        size <- attr(x, "size")
+        if(size == length(x)) {
+                update <- attr(x, "update")
+                xat <- attributes(x)
+                if(is.logical(update)) {
+                        if(update) {
+                                length(x) <- 2 *
+                                  length(x)
+                        else stop("stack overflow")
+                        length(x) <- length(x) +
+                                update
+}
+else {
+}
+}
+attributes(x) <- xat
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+230
+CHAPTER 9. S FOR S PROGRAMMERS
+# length change destroys attributes
+}
+x[[size + 1]] <- value
+attr(x, "size") <- size + 1
+x }
+The main complication here is that the list underlying the stack may need to be lengthened. The update argument can be either logical or numeric. If it is numeric, then this is the number of components to be added to the list each time it must be lengthened. When update is logical, then either the length is doubled, or growing the stack is disallowed.
+Of course we need a print method.
+"print.stack"<-
+function(x, ...)
+{
+}
+size <- attr(x, "size")
+if(size)
+        print(unclass(x)[1:size], ...)
+else cat("(empty stack)\n")
+cat("Class:", class(x), "\n")
+invisible(x)
+Here is a simple example of how a stack works.
+> jjstk <- stack(3)
+> print.default(jjstk)
+[[1]]:
+NULL
+[[2]]: NULL
+[[3]]: NULL
+attr(, "class"):
+[1] "stack"
+attr(, "size"):
+[1] 0
+attr(, "update"):
+[1] T
+> jjstk
+(empty stack)
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+9.8. THE R LANGUAGE 231
+Class: stack
+> jjstk[] <- 1:4
+> jjstk[] <- 1:3
+> jjstk
+[[1]]:
+[1] 1 2 3 4
+[[2]]:
+[1] 1 2 3
+Class: stack
+> jjstk[]
+[1] 1 2 3
+> jjstk
+[[1]]:
+[1] 1 2 3 4
+Class: stack
+> jjstk[]
+[1] 1 2 3 4
+> jjstk[]
+NULL
+Some would argue that an error should result from popping an empty stack. I think it is better in general to not create an error when the result is not demonstrably wrong—specific applications can make it an error if need be. This is to some degree a matter of taste.
+At this point the garden-variety use of the functions seems to be okay. One might be concerned if adding a NULL item onto the stack works properly (it does), and there are all sorts of things to be tested concerning the side effects.
+Queues can be defined analogously.
+9.8 The R Language
+To a great extent, code that works in S will do the same thing in R. However, there are some significant differences. One of the most drastic is that R inherits a different idea of how to search for objects due to its lineage to Lisp.
+Here is an example using R.
+R> x <- -1:4
+R> fjj.s.r
+function ()
+{
+subfun <- function() {
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+232 CHAPTER 9.
+x*x
+}
+x <- 23:25 subfun()
+}
+R> fjj.s.r() [1] 529 576 625
+And the same example in S.
+S> x <- -1:4
+S> fjj.s.r
+function()
+{
+        subfun <- function()
+        {
+x*x
+        }
+        x <- 23:25
+        subfun()
+}
+S> fjj.s.r()
+[1] 1 0 1 4 916
+S FOR S PROGRAMMERS
+The formatting of the function is different, but the significant difference is the answer. In S it is the global x that is used (see page 210 if you need to review). While in R the x that is defined in the function is used. That x is a mate to subfun because they are defined in the same environment.
+9.9 Things to Do
+Decide which pieces of code that you have written would be improved by making it object-oriented. Do it.
+Create a function that fully checks the input file for BATCH.
+Discover the modes that I haven’t talked about, and learn what they do.
+Find and fix the bugs in find.assign and global.vars.
+Find some .Internal calls that do not evaluate their arguments. Why don’t they?
+The loan function uses a quite general name for a rather specific case. Gener- alize loan so that it is worthy of its name.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+9.10. FURTHER READING 233
+Why didn’t I use functions named pop and push to implement stacks? Should I have? Is there a better rule for the location of assignment for a stack that has been popped?
+Implement a class for deques.
+9.10 Further Reading
+Becker, Chambers and Wilks (1988) The New S Language contains a thorough discussion of the S language. Chambers and Hastie (1992) Statistical Models in S has some further discussion of S; in particular, Appendix A explains the object-orientation in S.
+A discussion of basic data structures is in Knuth (1973). You can find out about R via statlib.
+9.11 Quotations
+28David Wagoner “Looking for Mountain Beavers” 29Wallace Stevens “Evening Without Angels” 30Gwendolyn Brooks “Boy Breaking Glass” 31Philip Mead “The Soldier”
+32Theodor Geisel “Fox in Sox” 33Gwendolyn Brooks “We Real Cool”
+

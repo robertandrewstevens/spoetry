@@ -1,0 +1,422 @@
+S POETRY
+by Patrick J. Burns
+
+Chapter 5: Choppy Water
+
+5.1 Identity Crisis
+5.2 Off the Wall
+5.3 Factors
+5.4 Things to Do
+5.5 Further Reading
+5.6 Quotations
+
+In which we learn to forecast the seas.
+
+This covers only programming — problems with statistics and with graphics are not given.
+
+5.1 Identity Crisis
+
+Benjamin Wharf, a linguist, had the theory that our view of the world is shaped by the words of our language. He presented the example that lots of fires are started by “empty” gasoline cans. (He worked for an insurance company.) An “empty” gasoline container is actually full of vapors, which is the explosive part.
+
+DANGER. Twoofthemostconfusingfunctionsareis.vectorandas.vector. The common notion of “vector” is an atomic vector. However, these functions think of a vector as an object without attributes. A better name would have been is.simple.
+
+DANGER. But wait, you also get inconsistency about names:
+
+> jjvec <- jjvecn <- 1:26
+> names(jjvecn) <- letters
+> is.vector(jjvec)
+[1] T
+> is.vector(jjvecn)
+[1] F
+> jjlist <- jjlistn <- as.list(1:26)
+> names(jjlistn) <- letters
+> is.vector(jjlist)
+[1] T
+> is.vector(jjlistn)
+[1] T
+
+So to paraphrase, it is easier for a list to be a vector than for a vector to be a vector. You’ll be glad to hear that as.vector and is.vector always agree with each other. Whenever you are tempted to use one of these functions, you should definitely ponder if this is the right thing.
+
+DANGER. Related to this are functions like as.double and as.character. These, like as.vector, strip attributes off of the object as well as coercing the contents. To preserve the attributes, you want to assign to the mode or storage mode:
+
+storage.mode(xmat) <- "double" # saves attributes
+
+DANGER. However, you should note that an object may have attributes and still pass the is.double test. It is generally the case that as.xxx(x) is not guaranteed to be the same as x when is.xxx(x) is TRUE.
+
+DANGER. is.matrix can also be a source of confusion. The definition of is.matrix is an object with a dim of length 2. Data frames fit this definition. The following nonsense
+
+if(is.matrix(x)) x <- as.matrix(x)
+
+actually is a useful idiom — it coerces a data frame to a matrix. is.array has
+similar behavior.
+
+DANGER. I’ve said it elsewhere, but it is worth saying again that using drop = F when subscripting matrices and arrays in function definitions often prevents bugs.
+
+DANGER.
+
+> jjm6 <- matrix(1:6,3)
+> jjm4 <- 10 + matrix(1:4,2)
+> jjm6
+     [,1] [,2]
+[1,]    1    4
+[2,]    2    5
+[3,]    3    6
+> jjm4
+     [,1] [,2]
+[1,]   11   13
+[2,]   12   14
+> jjm6[c(T,F,T),] <- jjm4[1,]
+
+Here is our plan with the command above: that each of the rows marked TRUE in jjm6 will end up being the same as the first row of jjm4. It’s disappointment time, because S has a different plan.
+
+> jjm6
+     [,1] [,2]
+[1,]   11   11
+[2,]    2    5
+[3,]   13   13
+
+S thinks of this as a certain number of positions being filled in jjm6 (arranged in the usual column-major order), and replicates the values on the right-hand side of the assignment to be the right length.
+
+DANGER. You can use the c function to combine lists as well as atomic vectors. If one of the arguments is a list, then it is as if all of the other arguments are coerced to be lists with as.list.
+
+> c(list("fjd",3:4), b=5:7)
+[[1]]:
+[1] "fjd"
+[[2]]: 
+[1] 3 4
+$b1: 
+[1] 5
+$b2: 
+[1] 6
+$b3:
+[1] 7
+> c(list("fjd",3:4), b=list(5:7))
+[[1]]:
+[1] "fjd"
+[[2]]: 
+[1] 3 4
+$b:
+[1] 5 6 7
+
+In most cases, it is the second of these that will be the proper formulation. If the vector is only of length one, then it doesn’t matter which is used.
+
+DANGER. There are times when S creates 1-dimensional arrays — arrays where the dim has length 1. One way to get such a critter is to use t to transpose an object that is not an array. It is rare that these appear, and even rarer that they are useful. The only problem with them is our tendency to think that they should be exactly the same as their non-array counterparts. They almost are.
+
+DANGER. tempfile is another Wharfian word — it should be called tempfilename to show that it merely returns the name of a temporary file, rather than creating the file.
+
+DANGER. When going from a floating point number to an integer, truncating is much faster than rounding. In the slow, old days that was an important consideration, and S still retains that feature. Whether the coercion is through is.integer, changing the storage mode to integer, or an internal coercion, numbers are essentially truncated. There is a little leeway — numbers that are very close to an integer are rounded up to the integer. S does an amazingly good job of it, but sometimes fails. The following example may be machine-dependent.
+
+> (2 - 0.1)/0.1
+[1] 19
+> as.integer(.Last.value)
+[1] 18
+
+Whenever you do computations to get numbers that are going to be coerced to
+integer, it is good practice to round them directly.
+
+DANGER. S hides the fact that numbers can be represented as double precision floating point, integer, and so on. Most of the numbers that S creates are double precision. On very rare occasions a number stored as an integer will act differently than if it had been stored as a double. The most common way to get integers is with the : operator.
+
+> storage.mode(1:10)
+[1] "integer"
+
+DANGER. Keep in mind that is.integer is a test of the storage mode, not of the values in the object. The vector c(0, 4, 6) contains values that are logically integer, but the storage mode is double.
+
+DANGER. A complex vector does not test TRUE in is.numeric.
+
+DANGER. An object need not be “null” just because it has length zero. 
+
+> is.null(numeric(0))
+[1] F
+
+Often where is.null appears, it is better to test if the length of the object is zero.
+
+DANGER. When you are changing an option, then you have to get the name of the option precisely right. For instance if you want to turn warning messages into errors, and you type
+
+options(warning = 2) # WRONG
+
+then you won’t get what you want because the name of the option is warn, you need to say
+
+options(warn = 2)
+
+The soptions function, given on page 45, guards against this problem.
+
+DANGER. The all.equal function does not return a logical value when the objects are not equivalent. So code like:
+
+if(!all.equal(x, y)) ...
+
+is not going to work properly.
+
+DANGER. This is quite picky, but if you are in a picky mood...
+
+> all.equal(as.numeric(NA), 0/0)
+[1] T
+> is.nan(as.numeric(NA))
+[1] F
+> is.nan(0/0)
+[1] T
+
+NaN’s and NA’s are not distinguished by all.equal.
+
+DANGER. The “not” operator can not be the first character in a command because it will be interpreted as an escape to the operating system.
+
+> !is.na(longley.y)
+Badly placed ()’s
+> (!is.na(longley.y))
+1947 1948 1949 1950 1951 1952 1953 1954 1955 1956
+   T    T    T    T    T    T    T    T    T    T
+1957 1958 1959 1960 1961 1962
+   T    T    T    T    T    T
+
+The “Badly placed” message is a syntax error from Unix.
+
+DANGER. The lag function does not change the actual data, it only changes the time points that the observations represent. Furthermore, in a sense it is “lead” rather than “lag”.
+
+5.2 Off the Wall
+
+DANGER. As far as I know there is only one spot in S where a space makes a difference. If you type x<-2 and expect a logical vector containing the values of x that are less than -2, you will be saddened to learn that you don’t get your logical vector, and you have just destroyed x by assigning it the value 2.
+
+DANGER. S has a number of reserved words that you may not use as the name of an object. Probably the most common reserved words that you might want to use are F, T, return, break, next. You can see an example of this problem on page 87.
+
+DANGER. A natural thing to try when testing for missing values is:
+
+> longley.y == NA
+ 1947 1948 1949 1950 1951 1952 1953 1954 1955 1956
+   NA   NA   NA   NA   NA   NA   NA   NA   NA   NA
+ 1957 1958 1959 1960 1961 1962
+   NA   NA   NA   NA   NA   NA
+   
+I’ve tried this myself a few times years after I knew better. The problem is that the NA is replicated to the length of x and then the answer is that number of missing values. The proper way to get this done is to use is.na:
+
+> is.na(longley.y)
+ 1947 1948 1949 1950 1951 1952 1953 1954 1955 1956
+    F    F    F    F    F    F    F    F    F    F 
+1957 1958 1959 1960 1961 1962
+   F    F    F    F    F    F
+
+DANGER. Do not modify the looping variable in a for loop. You will confuse at least yourself and possibly S also.
+
+DANGER. At least for version 3, you want corresponding arguments in the generic function and its methods to have the same name. Suppose that the first argument to the generic function is x and the corresponding argument in one of the methods is object. When we call the generic function, the argument is evaluated and called x. The class says to use our method, so that function becomes the operable one. The method needs object so it evaluates the first argument, again. In the best circumstances this is merely inefficient. At times, though, the double evaluation can be a bug — for instance, if randomness is involved.
+
+Let’s make it even worse. If the method has object as the argument corresponding to x in the generic function, and the method also has x as an additional argument, real trouble develops. Now when we get to the method, it re-evaluates the first argument to get object, but it doesn’t evaluate x because it already knows what x is (though it is the wrong x as far as the method is concerned). And what a congress of stinks! [19]
+
+DANGER. To create a vector of doubles that is 10 long, you say double(10) and you say integer(10) to create a vector of 10 integers. But list(10) does not create a list that is 10 long — it creates a list that has one component (that is the number 10). To initialize a list with length 10, you need to use the circuitous statement:
+
+vector("list", 10)
+
+This is another reminder that the word “vector” has more than one meaning in S.
+
+DANGER. A common code fragment goes like
+
+for(i in 1:length(x)) ...
+
+This is fine, except when the length of x is zero, in which case i is first 1 and then 0. Seldom what you want. If there is a chance that the length of x will be zero, then use the following instead:
+
+for(i in seq(along = x)) ...
+
+DANGER. While we are on the subject, another popular way to mess this up is to say:
+
+for(i in length(x)) ...
+
+This only does the last of the intended iterations.
+
+DANGER. If you dump (using dump) an object that contains a call component or attribute, then the restoration is not going to work. The call component will be evaluated instead of remaining merely an image of what to evaluate. This is another reason to use data.dump when making ASCII representations
+of objects that are not functions.
+
+DANGER. In version 3 of S-PLUS a common idiom to arrange for object code to be loaded automatically is something like:
+
+if(!is.loaded(symbol.C("myfun_Sp")))
+    dyn.load("myfun.o")
+
+If you do this, make sure that you get the symbol right for is.loaded. In particular, you want to spell the routine name correctly and you do not want to forget the symbol.C or symbol.For. If you get it wrong, then the loading will occur each time that the function is called instead of once per session. This isn’t so bad if it is only called a few times in a session. But when it is called hundreds of times, then pieces of memory get eaten by the loaded code, your memory gets fragmented, and you can start paging or run out of memory all together.
+
+DANGER. Consider the following function.
+
+switch.chartest <- function(this.op) {
+    ans <- switch(this.op, 
+                  a = {
+                        cat("doing a\n")
+                        1 
+                  }
+                  , 
+                  b = {
+                        cat("doing b\n")
+                        2 
+                  }
+                  , 
+                  {
+                        cat("doing other\n")
+                        3 
+                  }
+                  ) 
+    ans
+}
+> switch.chartest
+
+Now give this a few values:
+
+> switch.chartest("a")
+doing a
+[1] 1
+> switch.chartest("b")
+doing b
+[1] 2
+> switch.chartest(" ")
+doing other
+[1] 3
+> switch.chartest("")
+
+It is fine except when we give it an empty string. When switch dispatches on an empty string, then it does nothing instead of doing the default code.
+
+> jj <- switch.chartest("")
+> jj
+> mode(jj)
+[1] "missing"
+
+And the nothing that it does is a little bizarre. This is a bug, and it exists at least in S-PLUS version 3.4 and earlier.
+
+5.3 Factors
+
+There are a number of sticky bits with objects of class factor. Unfortunately, this section is not likely to cover all of the problems. Examples will use the object jjfac.
+
+> jjtypen
+  Harold Dorothy Munchkin Stevie
+ "corgi" "corgi" "cat"    "cat"
+> jjfac <- factor(jjtypen)
+
+DANGER. The first thing that is strange is that the names are not printed even though they are there.
+
+> jjfac
+[1] corgi corgi cat   cat
+> unclass(jjfac)
+Harold Dorothy Munchkin Stevie 
+     2       2        1      1
+attr(, "levels"):
+[1] "cat"   "corgi"
+> names(jjfac)
+[1] "Harold"   "Dorothy"  "Munchkin" "Stevie"
+
+This is a design decision that is sensible once you consider the alternatives. Factors are printed as strings with no quotes around them, so are names. So if the names were printed, it would be rather ambiguous at times which corresponded to names and which to the data. If factors used quotes, then they would be hard to distinguish from character data.
+
+DANGER. Here is reasonable behavior from a version of S-PLUS:
+
+> factor(factor(jjtypen, exclude="cat"))
+ Harold Dorothy Munchkin Stevie
+ corgi  corgi   NA       NA
+> version
+Version 3.1 Release 1 for Sun SPARC, SunOS 4.x : 1992
+
+Though note that the names are printed here, unlike in other cases. Now with a later version:
+
+> factor(factor(jjtypen, exclude="cat"))
+ Harold Dorothy Munchkin Stevie
+ NA     NA      NA       NA
+Levels:
+[1] "1"
+> version
+Version 3.4 Release 1 for Silicon Graphics Iris, IRIX 5.3 : 1996
+
+Obviiously, someone fixed something. (This is stolen from a message to S-News by John Maindonald.)
+
+DANGER.
+
+> labels(jjfac)
+[1] "Harold"   "Dorothy"  "Munchkin" "Stevie"
+
+There is a labels argument to factor, but this is not the same as the result of the labels function on the factor. The labels argument tells how to make the levels attribute of the factor. The labels function is generic and is meant to give a name to each datum in the object, in this case it is the same as the names.
+
+DANGER. Coercion from factor is not necessarily smooth and enlightened. (Z. Todd Taylor pointed this out to S-news.)
+
+> paste(names(jjfac), "is a", jjfac)
+[1] "Harold is a 2"   "Dorothy is a 2"
+[3] "Munchkin is a 1" "Stevie is a 1"
+
+Though this answer may arguably be true, it is not what some of us would have in mind. We need to explicitly coerce to character.
+
+> as.character(jjfac)
+[1] "corgi" "corgi" "cat"   "cat"
+> paste(names(jjfac), "is a", as.character(jjfac))
+[1] "Harold is a corgi"  "Dorothy is a corgi"
+[3] "Munchkin is a cat"  "Stevie is a cat"
+
+Those involved are happier with this.
+
+DANGER. There is not a factor method for c (at the time of writing at least).
+
+> jjpet <- c(Sybil = "cat", Shera = "cat", Fred = "chinchilla")
+> jjpetfac <- factor(jjpet)
+> jjpetfac
+[1] cat        cat        chinchilla
+> c(jjfac, jjpetfac)
+ Harold Dorothy Munchkin Stevie Sybil Shera Fred
+      2       2        1      1     1     1    2 
+> unclass(.Last.value)
+Harold Dorothy Munchkin Stevie Sybil Shera Fred 
+     2       2        1      1     1     1    2
+
+We really want to take this more scenic route.
+
+> factor(c(as.character(jjfac), as.character(jjpetfac)))
+[1] corgi      corgi      cat        cat
+[5] cat        cat        chinchilla
+
+DANGER.￼Be careful when you use the codes function. The levels may be permuted because codes sorts them.
+
+> jjfac2 <- factor(jjtypen, levels = c("corgi", "cat"))
+> unclass(jjfac2)
+Harold Dorothy Munchkin Stevie 
+     1       1        2      2
+attr(, "levels"):
+[1] "corgi" "cat"
+> codes(jjfac2)
+[1] 2 2 1 1
+
+Here codes gives a different code than what is actually in the object since the levels are not in alphabetic order.
+
+DANGER. You want to pay a little attention when you are creating ordered factors.
+
+> jjo
+[1] 90 90 100 90 110 100 110 
+> ordered(jjo)
+[1] 90 90 100 90 110 100 110
+
+90 < 100 < 110
+
+jjo is a numeric vector. We make an ordered factor with it, and everything is
+fine. However, the same character vector doesn’t give the same answer.
+
+> ordered(as.character(jjo)) 
+[1] 90 90 100 90 110 100 110
+
+100 < 110 < 90
+
+Now we get 90 being greater than 110. The sorting is being done in dictionary order rather than numeric order.
+
+DANGER. There is a special idiom for coercing an ordered factor that represents numbers into those numbers.
+
+> jjof <- ordered(jjo)
+> jjof
+[1] 90 90 100 90 110 100 110
+
+90 < 100 < 110
+> as.numeric(jjof)
+[1] 1 1 2 1 3 2 3
+> as.numeric(as.character(jjof)) 
+[1] 90 90 100 90 110 100 110
+
+Just using as.numeric is tempting, but not right. All sorts of trouble might ensue if it were changed so that it did work since the object underlying factors is a numeric vector.
+
+DANGER. A reason that many of the problems with factors come up so often is that data frames are excessively fond of factors — they favor factors over character data. When a data frame is created, often a character vector is coerced to be a factor.
+
+5.4 Things to Do
+
+Create a new class of objects for categorical data that has none of the problems that factors do.
+
+Look through your functions for these trouble spots.
+
+5.5 Further Reading
+
+The S-news list.
+
+5.6 Quotations
+
+[19] Theodore Roethke “Root Cellar”

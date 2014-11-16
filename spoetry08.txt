@@ -1,0 +1,425 @@
+S POETRY
+by Patrick J. Burns
+
+Chapter 8: C for S Programmers
+
+8.1 Comparison of S and C
+8.2 Loading Code into S
+8.3 Arrays
+8.4 C Code for S
+8.5 Debugging
+8.6 Common C Mistakes
+8.7 Fortran
+8.8 Things to Do
+8.9 Further Reading
+8.10 Quotations
+
+
+C is a natural partner for S. If you know C but not S, then the next section can help you to learn S.
+
+8.1 Comparison of S and C
+
+The big difference between C and S is that C is compiled while S is interpreted. Thus C is much faster at calculations than S is—changing strategic portions of S code into C can often cause execution time to drop from minutes to seconds. This science is then like gathering flowers of the weed 26
+S code and C code look very similar (this is not accidental). However, there are some striking differences.
+DANGER. The most bothersome discrepancy is that indexing in C is zero- based while indexing in S is one-based. So saying x[1] gets the first element in S but the second element in C. Although this difference is a fertile source of bugs, I think each language has done the right thing—zero-base is good for machines where C has its strength, and one-base is good for humans.
+C requires that everything has its type declared. C also requires the user to take care of allocating and freeing memory, while this is automatic in S. Nothing is vectorized in C. C demands that each command end with a semicolon (there is no penalty for a C programmer who puts such semicolons in S code).
+C has a number of operators that S does not. The most important of these are the increment operators like i++ and i += n. Another example is the ability of C to operate on bits.
+Names in S and C have similar forms except for one important difference. In S, periods are the only non-alphanumeric character allowed in names. In C, it is underscores that are the only non-alphanumeric character. Furthermore, the period is an operator in C, and the underscore is an operator in S. Like S, C distinguishes lower-case from upper-case letters. There is a limit to the length of a name in C, but the ANSI standard requires that that length be at least 31 characters.
+There are two flavors of C, the original version is known as K&R C after Kernighan and Ritchie who wrote it and the book describing it. The other is ANSI C. The ANSI standard mainly extended and clarified the language, but the most visible change is in how arguments to functions are given. The old- style (K&R) contains just the argument names within the argument list, and the arguments are declared outside the list, as in:
+double my_fun(x, n)
+long n;
+double *x;
+The new-style (ANSI) contains the declarations within the argument list:
+double my_fun( double *x, long n)
+Being old-fashioned, most of my example C functions follow the old-style.
+A feature of C that is entirely novel relative to S is pointers. A pointer is an object that contains the address of some value. In S you can only grab hold of the values, never the address. Pointers are what tend to cause the most confusion to novice C programmers. There really isn’t all that much to them though, and there’s no need to panic. If you have a pointer (which is the address of something), then you can “dereference” it (get the value at that address) with the * operator. (* also means multiplication as it does in S, but which is meant is distinguished by context.) A code fragment is:
+double *xpointer, old, new;
+old = *xpointer;
+*xpointer = new;
+Here both old and new are double-precision numbers and xpointer is a pointer to a double. The original value at the xpointer address is given to old, then the value of new is placed at that address.
+You can also get the address of an object with the & operator (this is sort of the inverse of the dereferencing operator). An example that is subtly different from the last is:
+double *xpointer, old, new;
+old = *xpointer;
+xpointer = &new;
+
+￼￼￼C Operator Task S Equivalent
+￼￼[
+  .
+  ->
+  &
+  *
+  ++
+  --
+  *
+  /
+  %
+<< >>
+array subscript [ structure member $ structure pointer member $ address of none dereference none increment none decrement none multiply * floating or integer divide / %/% modulo %% bit shift none
+￼￼￼￼￼￼￼￼￼￼￼￼￼￼￼￼￼￼￼￼Table 8.1: Some C operators and approximate S equivalents, if any.
+￼￼￼Operator C Meaning
+. structure member
+-> structure pointer member
+_ character in names
+& address of or bitwise and
+^ bitwise exclusive or
+| bitwise or
+? ifelse trinary operator
+: ifelse trinary operator
+= assignment
+# introduce preprocessor command
+S Meaning
+character in names assignment to right assignment vectorized and exponentiation vectorized or
+help
+sequence
+argument matching introduce comment
+￼￼￼￼￼￼￼￼￼￼￼￼￼￼￼￼￼￼￼￼￼Table 8.2: Operators with different meanings in C than in S
+This still has the same value for old and xpointer still points to the same value. However, in the first example the value at one address is changed, while in the second it is addresses that change. The second example would be unusual—the first example would more often be correct. The & operator is most commonly used in function calls where the function is expecting a pointer, but you have a value.
+Table 8.1 lists some of the operators in C, and table 8.2 lists some operators that have the potential for confusion between C and S. Exponentiation in C is done with the pow function in math.h. The modulo operator % in C works only on integers, but %% in S works with floating point numbers also.
+Flow control is almost identical in the two languages. In particular, braces are used precisely the same to group multiple statements into a single statement. A notable exception is that the control mechanisms for for loops are distinctly different. The format and to some extent the functionality of switch differs in C and S. C has a do-while loop that is absent in S (repeat can be used to do the same thing). C does not have a repeat, but this is easily replaced with while(1). One more difference is that next in S is continue in C (I favor S in this regard).
+An example of a for loop in S is: for(i in 1:10) { x[i] <- i }
+while a similar for loop in C would be: for(i=0; i < 10; i++) { x[i] = i; }
+So there are three parts inside the parentheses of a C for. The first part is the initialization. The second part is a test, where the loop is exited the first time that the test is false (so it is possible that the body of the loop is never entered). The third part states what to do after each iteration. (Notice that the resulting vector in C will be different than the one in S.)
+If you want more than one statement in either the first or third part, you can put commas between the statements. Here’s an example:
+for(i=0, ij=0; i < 10; i++, ij += n)
+Another differeence is that the iteration variable in an S for is local to the loop. In C it is not local to the loop, and—as we’ve seen—there need not even be a unique variable.
+An example of the format of a switch statement in C is:
+switch(x) {
+case’b’:y+=3; z=6;break;
+case ’d’:
+case ’e’: y += 2; return(y);
+case ’h’: z += 8; /* fall through */ case ’n’: y += 9; break;
+default: y -= 8; break;
+}
+This is a bizarre example, but shows the rules. The switch variable can be either a character or integer—in this case it is character. The body of the switch is one expression which is divided by a number of case statements. Case b shows that one difference with S is that there can be any number of statements for a C case, while S demands a single expression for a case (multiple statements need to be surrounded by braces). Case d is empty which means that it is identical to the next non-empty case—this is like S except that S doesn’t have this feature for numeric variables. Case h shows how the C switch is fundamentally different than that of S. Since there is no break or return in case h, it goes into case n also. Hence the order of the cases in a C switch can make a difference. It is typical that each case end with break.
+
+C has a unique way of specifying comments—they begin with /* and end with */. You can have anything in a comment except */ (that is, comments don’t nest). A definite advantage to this form of comment delimiting is that it is easy to comment out a section of code. There is no equivalent in S to do this. However, there is a trick—you can put the code inside an if that is always FALSE.
+The # symbol is used in preprocessor commands. The C preprocessor is a powerful feature of C that inserts include files, makes platform dependent versions, and many more things—there is no equivalent feature in S. The pre- processor performs its commands to change the source file before the compiler sees it. For example, the first line of a C source file might be:
+#include <S.h>
+This inserts the contents of the S.h file into the source file. The angle brackets mean that the preprocessor is free to look in a number of locations for the file. The S.h file is the header file that comes with S—it contains a number of definitions that can be used in C code. Although code using S.h is often called from S, it need not be.
+The next step is to compile the source code. You can do this directly, but if you have S-PLUS, then you can use the utility created for the purpose. An example is:
+Splus COMPILE myfun.c
+The COMPILE utility is meant to perform an appropriate compilation on whatever
+platform you are using. And often does.
+
+8.2 Loading Code into S
+
+The C functions that can be called from S are of a restricted class. All of the arguments must be pointers (which makes sense if you consider that S vectors translate to C arrays). The function is typically declared as void since return values are thrown away. The arguments may be *long (integer or logical in S), *double (double in S), *float (single in S), or **char (character in S). There is an exception—see the discussion of the pointers argument to .C on page 177.
+Note that structures are not allowed as arguments. If you learn C especially for S, there is the tendency to avoid the use of structures since they may not be passed in. Fight this impulse—structures in C are the equivalent of lists in S, and are very useful.
+If you have existing C code that you want to use in S, it should not be difficult to write a wrapper function in C so that it obeys the requirements that S has. There is a limit on the number of arguments allowed, but this is large enough that it should seldom be of concern.
+
+The S executable (the file that contains the stuff that makes S actually go) contains a symbol table. First off, a symbol is a translation of a routine name based on platform specific rules. Generally a symbol is the routine name with underscores before and/or after it. C symbols are different than Fortran symbols. In S-PLUS you can do:
+symbol.C("fjj")
+symbol.For("fjj")
+to see how your system does it. A symbol table associates each symbol that it knows to an address.
+When you load code into S, you are extending or changing the symbol table. The two main divisions of loading code are static loading and dynamic load- ing. Static loading means that you combine the executable as it stands with additional code and get a new (larger) executable. Dynamic loading is when the executable is already executing and you add the code to this instance of execution—the executable is not changed, merely the S session.
+Static loading is done with the LOAD utility. One good use of static loading is if everyone at a site needs access to a specific set of routines that are thoroughly debugged. These routines can be statically loaded into S, and the script with which users start S can point to this new executable. The other good use for static loading is when dynamic loading is unavailable or doesn’t work for the code at hand. The disadvantage of static loading is that a new executable is created—the size of which is measured in megabytes. An explanation of how LOAD works is on page 191.
+In S-PLUS there are three functions that do dynamic loading: dyn.load, dyn.load2 and dyn.load.shared. Not all of these will be available on a
+particular platform.
+dyn.load is the simplest of the three. It takes a character string which is the name of an object file; all of the symbols in the file need to be defined either in the file or in the S session. (Actually dyn.load will take a vector of file names—the order of the files can matter because it is like a series of individual calls to dyn.load.)
+dyn.load2 and dyn.load.shared are different ways to solve the same prob- lem. These functions allow symbols that are defined in neither the source file nor the S session to be pulled from libraries. Unlike dyn.load, you can not make two different calls to dyn.load2 to load related symbols—all the symbols must be put into the S symbol table with a single call to dyn.load2.
+Troubles with dynamic loading are fairly common, and often hard to solve. The more complex the situation with symbols, the more likely problems will arise. It is not likely that dynamically loading a self-contained file will fail. If using dyn.load2 or dyn.load.shared doesn’t work, you can try using the Unix command ld to create a file that contains all of the necessary symbols so that using dyn.load is a possibility. Picturing what is happening with the symbols
+
+￼￼￼ob ject
+single value
+ordered, 1 type rectangle of 1 type hyperrectangle of 1 type collection, several types
+S
+vector vector matrix array list
+C
+scalar array
+structure
+Fortran
+scalar
+vector matrix array
+Perl
+scalar array, list
+￼￼￼￼￼￼￼￼￼￼￼Table 8.3: Terminology from various languages.
+can be a substantial help in solving a loading problem. A tool that can help is
+the NM utility discussed on page 192.
+One loading problem that can arise is when there are duplicate symbols. This generally happens when the same function is in two different places. However, there is the possibility that there are two different functions with the same name. C provides a very good way of keeping this from happening. All C functions except those that are used in a .C call in S can be declared static. This means that you can have a C function called sort and it will not conflict with any other “sort” as long as you declare it static in your C source file. If you declare as many functions as possible to be static, then there will only be a few symbols that can possibly conflict. To reduce the possibility that these remaining names will conflict with something, you can put a personal prefix or suffix on the name. Many of the in-built C routines in S begin with a capital S and an underscore. For instance, there could well be a C function called “S sort”. My personal convention for names that are going to be used in S is to put “ Sp” at the end; so my sort routine—if it were not static—would be called “sort Sp”.
+
+8.3 Arrays
+
+It is common for C programmers to think of matrices as pointers to pointers so that they can be subscripted like:
+cmat[i][j]
+However, an S matrix passed into C is merely a C array (i.e., a pointer). If you have code that uses pointers to pointers for matrices, then you will need a wrapper function in C to convert back and forth between the two conventions. Table 8.3 lists terminology from some languages for a few simple data struc- tures. There is plenty of room to trip over the nomenclature between S and C. For example, a C programmer may well think that a “character vector” is a character string, while S programmers know that a “character vector” is a vector containing character strings.
+If you are writing your own numerical code, then I advise treating matrices in C the same way that S does. You need to do some arithmetic to get a specific row and column, but it is easy to do. This is the way that Fortran handles matrices also, so Fortran matrix code can be called from C when using this convention. It is simple to generalize to higher dimensional arrays.
+Here is an example that computes quadratic forms x′Qx where Q is an n by n matrix and x is a vector. The S function generalizes this to allow a number of quadratic forms to be evaluated in one call by passing in a matrix x, each of whose columns is an x in the quadratic form.
+static double
+quad_form(double *Q, double *x, long n)
+{
+}
+long i, j, ij;
+double ans = 0.0;
+for(i=0; i < n; i++) {
+        for(j=0, ij = i * n; j < n; j++, ij++) {
+} }
+return(ans);
+ans = ans + x[i] * Q[ij] * x[j];
+void
+quad_form_Sp(double *Q, double *x, long *xdim, double *ans)
+{
+        long i, ii, n;
+        double quad_form(double*, double*, long);
+n = xdim[0];
+        for(i=0, ii=0; i < xdim[1]; i++, ii += n) {
+                ans[i] = quad_form(Q, x + ii, n);
+} }
+Stepping through the matrices is made efficient by incrementing the subscripts rather than always performing a multiplication. Here is the S function that calls this code.
+"quad.form"<-
+function(qmat, x)
+{
+        dq <- dim(qmat)
+        dx <- dim(as.matrix(x))
+        if(length(dq) != 2 || dq[1] != dq[2])
+                stop("qmat must be a square matrix")
+}
+if(dx[1] != dq[2])
+        stop("qmat and x do not match")
+if(!is.loaded(symbol.C("quad_form_Sp")))
+        poet.dyn.load("quad_form.o")
+.C("quad_form_Sp",
+        as.double(qmat),
+        as.double(x),
+        as.integer(dx),
+        double(dx[2]))[[4]]
+This function saves a little time compared to the usual S operation by using one operation instead of two matrix multiplications. If you really want to evaluate a number of quadractic forms with the same kernel, then this will save a lot of time. If the kernel matrix is symmetric and large, then some more efficiency can be squeezed out by modifying the looping in quad form.
+
+8.4 C Code for S
+
+One type of functionality that the S header provides is for handling missing values and special values. The C functions include is na, is inf, na set, na set3 and inf set. (Actually these are generally macros rather than functions, so you don’t want to have side effects in the arguments.) The first two arguments to each of these is a pointer to the value of interest, and the storage mode of the object (back in S), the names to use for the modes are listed in table 8.4. is na and na set3 use the symbols Is NA and Is NaN to distinguish between missing values and not-a-numbers. So to set the ith element (i + 1th
+in S) of x to be a not-a-number, you would say:
+na_set3(x + i, DOUBLE, Is_NaN);
+You can see some of the C functions that handle special values in the code for the digamma function on page 262. If you want to allow missing values in the arguments to your C function (or Fortran subroutine) that is called from S, then you need to use the NAOK argument to .C. The specialsok argument in S-PLUS allows infinite values. Neither of these arguments may be abbreviated.
+C code that will be called by S and needs to allocate memory can use the S alloc C function. This is similar to malloc, but does not have a correspond- ing free statement. The memory that is allocated by S alloc is automatically freed when the S memory frame containing the C call is exited. It is freed even if there is an abnormal exit from the C code, so you are guaranteed that the space will be freed.
+If your routine uses workspace, then it is better to allocate the workspace in C with S alloc rather than passing it in through the call to .C. S will copy the
+
+Table 8.4: Modes within C Code. object in the latter case. Use of S alloc might look like:
+     long *iwork;
+     double *work;
+     work = (double *)S_alloc(n, sizeof(double));
+     iwork = (long *)S_alloc(2 * n, sizeof(long));
+You can issue the equivalent of stop and warning statements in your C code called by S. These start with PROBLEM followed by a string, followed by arguments to be placed in the string (if any), followed by another magic phrase indicating if it is an error or a warning. An example of a warning is:
+     PROBLEM "bad, bad, i is %d, x is %g", i, x
+          WARNING(NULL_ENTRY);
+An example of an error statement is:
+PROBLEM "really bad" RECOVER(NULL_ENTRY);
+Note that there are no parentheses (they are in the definition of the PROBLEM
+macro and its mates), and you need not have a newline at the end of the string.
+S-PLUS makes available routines so that you can use the S random number generator in your C code. Before you can generate any random numbers, you need the line:
+     seed_in((long *) NULL);
+This makes the random seed available. After all random numbers have been generated, say:
+     seed_out((long *) NULL);
+This updates the stored random seed, so that the same “random” numbers will not be generated repeatedly. The two functions that generate random numbers are unif rand and norm rand, both of which return a double.
+
+￼￼￼S storage mode
+logical integer single double complex
+Name in C
+LGL
+INT
+REAL
+DOUBLE
+COMPLEX
+C declaration
+long
+long
+float
+double
+complex
+
+The example below shows how to use the random functions. It produces a sequence of random Gaussian deviates that terminates the first time that one of the random numbers is greater than a specified value. It also introduces a couple more tricks for C programs in S—the S realloc function and the pointers argument to .C.
+#include <S.h>
+void
+rand_seq_Sp(pars, ipars, ans, alen)
+long *ipars, *alen;
+double *pars, **ans;
+{
+￼}
+long count=0, curlen, incr=ipars[0], safety=ipars[1];
+double threshold=pars[0], rmn=pars[1], rsd=pars[2];
+double this_rand;
+*ans = (double *)S_alloc(incr, sizeof(double));
+curlen = incr;
+seed_in((long *) NULL);
+while(1) {
+        this_rand = norm_rand() * rsd + rmn;
+        if(count >= curlen) {
+                S_realloc(*ans, curlen + incr, curlen,
+                        sizeof(double));
+                curlen += incr;
+        }
+        (*ans)[count++] = this_rand;
+        if(this_rand > threshold) break;
+        if(count >= safety) {
+} }
+seed_out((long *) NULL);
+*alen = count;
+PROBLEM "reached maximum length, exiting"
+        WARNING(NULL_ENTRY);
+break;
+The random part of this function is easy. Reasonably easy is the use of S realloc—when the space allocated by S alloc is no longer large enough, S realloc allocates a new, larger space and takes care of transferring the old values to the new location. Its arguments are the pointer to the space, the new length, the old length, and the size of the elements.
+Not so transparent is what is happening with ans. Generally ans would be a pointer to double, but here it is a pointer to a pointer to double. The reason is that the length of ans is not known in advance, so it uses the pointers argument to the .C S function. Here is the S function that calls this code:
+"fjjrand.seq"<-
+function(threshold, mean = 0, sd = 1, increment = 1000,
+{
+safety = 10000)
+if(!is.loaded(symbol.C("rand_seq_Sp")))
+        poet.dyn.load("rand_seq.o")
+ans <- .C("rand_seq_Sp",
+        parameters = as.double(c(threshold[1],
+                mean[1], sd[1])),
+        as.integer(c(increment[1], safety[1])),
+        sequence = double(0),
+        pointers = c(F, F, T))[c("sequence",
+        "parameters")]
+names(ans$parameters) <- c("threshold", "mean",
+        "stand dev")
+ans$call <- match.call()
+ans }
+Notice that there is one less argument to .C (excluding the pointers argument) than there is in the C function. Each argument to .C that is a pointer corre- sponds to two arguments in C—the first C argument is a pointer to a pointer, and the second argument is a pointer to long that gives the length of the object.
+DANGER. Whenusingthepointersargument,don’tforgettosetthelength of the variable-length objects in C.
+In the call to .C the first element of threshold and several other variables are extracted when combining variables together for arguments to the C function. This ensures that a misspecified S argument will not completely mess up the C call. An alternative strategy is to check the length of each variable.
+S-PLUS gives you routines that help you when calling Fortran from C. See the PORT optimization example on page 340.
+A C function that is included with S is call S which allows C code used by S to go back to S and evaluate an S function. I’m not going to give an example of its use. Although it does have its place, it is less useful than might be thought. (You still have the overhead of the S function call, so you can’t gain speed by looping in C instead of S.) Examples of how to use call S are in Becker, Chambers and Wilks (1988) and Spector (1994).
+
+8.5 Debugging
+
+If you are unlucky, one of the first things you will see when you use an S function that calls some of your C or Fortran code is something like:
+System terminating: bad address
+and you are thrown out of S and back into the operating system. The system terminating happens when S detects that something bad has happened, and it kills itself to prevent permanent damage in case of corruption. The system terminating gives an indication of what went wrong. The most common is “bad address” which is often an indication of running off the end of an array, or an argument mismatch. The second most common is “bus error” which is an indication of serious confusion. I never heard that sound by day. 27
+If you see a system terminating in an S session in which no local code is used and you are not masking any in-built functions, then there is a bug. You should report this to your provider of S. A system terminating can be caused from a corrupted version of an in-built function—and it need not be apparent what the problem is. Likewise, locally written code that is loaded into S can cause a problem that only later results in a system termination. Usually, though, the termination occurs immediately.
+The most common problem with .C or .Fortran calls is that there is the wrong number of arguments or they are not declared properly. Each argument in a .C or .Fortran call needs to be either coerced to the correct storage mode or to have had its storage mode coerced directly before the call. If not, it is a bug.
+Capricious Rule 1 Your skin crawls when you see an argument to .C or .Fortran whose storage mode is not coerced.
+DANGER. Storage mode integer in S corresponds to long in C. On many machines a long is identical to an int so it is possible to declare S integers as int in C and have the program run. Don’t do it. Some day when you try to make this go on some other machine where the long-int identity doesn’t hold, there are likely to be a number of frustrating hours wasted trying to track down the problem. Remember that the more subtle and silly the mistake, the harder it is to find.
+DANGER. A common way to have the number of arguments different in the .C call and the C function is to edit the C function and recompile, but forget to edit the S function.
+
+On Unix the lint command looks for mistakes in C code, like mismatches of type and variable numbers of arguments. If you have S-PLUS and you are using S.h, then you can use a command like:
+lint -I‘Splus SHOME‘/include myfun.c
+This tells lint the appropriate place in which to look for the S header file.
+A tried and true debugging technique is to insert print statements into the code. The C function printf is the most likely candidate to use to print messages. The first argument to printf is a character string which may contain excaped characters such as backslash-n, and it also typically contains locations for any subsequent arguments. The locations for the additional arguments are marked with a symbol that starts with % and is followed by a letter that indicates the type of object to be printed. Here’s an example:
+printf("i is %d  x sub i is %f\n", i, x[i]);
+which might result in the output:
+iis0 xsubiis4.9 iis1 xsubiis9.3
+If you are inserting print statements because the function is hanging and you want to know how far it is getting, then you will need to flush the output. To save time, C puts output into a buffer and only really writes once the buffer is full. So if the buffer never fills, you won’t see your output. The usual command to flush printf output is:
+fflush(stdout);
+(stdout is defined in S.h.)
+When I’m in a disciplined mood, I make an initial debugging statement in the C code that prints a version number. The routine is: modify the C code, compile the C code, load the code into S, try out the code. Once I’ve done this several times and frustration is setting in, I sometimes forget either to compile the code or load the code so it appears that my last change had no effect when in fact the last change is not being used. Of course I need to remember to change the version number when I edit the code in order for this trick to be effective.
+There are times when optimization during compilation—especially a high level of optimization—causes bugs to appear. My strategy is to use the standard level of optimization except on files that are primarily arithmetic; and I generally time the computations to see if the optimization really works.
+
+8.6 Common C Mistakes
+
+DANGER. The most common mistake is to leave out semicolons. This is seldom a serious mistake since the compiler will catch most instances. A more serious mistake can be putting a semicolon where it doesn’t belong. In:
+if(i); j = 0;
+the code will compile without a problem, but will not do what was probably intended. The code as it stands will test the value of i, then do nothing, and finally always set j to 0. If the intention is to set j to 0 if i is not, then that first semicolon has got to go.
+DANGER. It is easy to get the indexing wrong on an array. It is natural to translate the S expression:
+for(i in 1:n)
+into C as:
+for(i=1; i <= n; i++)  /* WRONG */
+Once you are past that, you might try the more subtle:
+for(i=0; i <= n; i++)  /* STILL WRONG */
+You really want:
+for(i=0; i < n; i++)  /* RIGHT */
+DANGER. Be careful when performing division with integers—the result is an integer, not a floating point number. Integer division doesn’t commute like floating point division does. Consider the code fragment:
+long n, ans1, ans2;
+ans1 = n * (n + 1) / 2L;
+ans2 = n / 2L * (n + 1);
+ans2 is not the same as ans1 unless n is even. ans1 is probably what was in- tended. An extra pair of parentheses to guarantee the computation order would be a good idea.
+DANGER. If you have a statement containing:
+xmat[i,j]  /* WRONG */
+then it is wrong (but it will compile). The comma operator evaluates each state- ment but has the value of the right-most statement. So the above is equivalent to xmat[j].
+DANGER. Another common mistake is to use = where == is desired. The statement:
+if(j=4) j++;  /* WRONG */
+will once again compile, but not do the right thing. After this statement j will always be 5 no matter what it is before the statement. C, like S, returns a value from assignment. Such a mistake is not possible in version 3 of S, since it is a syntax error. (You will have the opportunity for such bugs in version 4, however.)
+DANGER. Do not use print instead of printf. The code will compile, but have severe problems in the execution.
+
+8.7 Fortran
+
+I give Fortran less emphasis partly from personal taste (though I admit that newer versions of Fortran are definite improvements on older ones), and partly because there are more complications when interfacing Fortran to S than when interfacing C. However Fortran has the one big advantage that lots of algorithms are programmed in it. It is usually faster and safer to have a little hassle interfacing existing Fortran to S than to write new C code.
+A squabble between Fortran and S is that S doesn’t handle Fortran in- put/output. If you have the source code for the Fortran, then the easiest thing to do is to comment out all of the input/output statements. This step may be as simple as just commenting out lines, or it may involve extensive changes to have data passed in through arguments rather than read in. If you don’t have the source code, then you may need to ensure that S has a number of symbols loaded that it generally doesn’t have by writing C functions and loading them. For example, one function might look like:
+#include <S.h>
+s_wsFe() {
+    fprintf(stderr, "Trying to use Fortran I/O\n");
+}
+S does come with some Fortran subroutines that produce printed output in S format. These are often useful for debugging purposes. The names of the routines are dblepr for double-precision data, intpr for integers (and logicals), and realpr for single-precision numbers. Each of these allows a message also. An example call is:
+     call dblepr(’x is’, -1, x, nx)
+The first argument is a message. The second argument is the length of the message, though most compilers are nice enough to do the counting for you if you give it a negative 1. The third argument is the name of the variable that you want to print, and the fourth argument is the number of elements to be printed. You do not need to print all of the values in the variable—it will print the first few values if you choose.
+DANGER. AtleastinsomeversionsofS,thenameofthesubroutinethatyou are calling in the .Fortran call needs to be in all lower-case. Fortran doesn’t care about the difference, but S needs to have it that way.
+It is a lot easier to get name conflicts in Fortran names because the name space is so much more limited (you only have 6 characters to work with), and all of the names are visible. You merely have to do the best that you can to try to avoid collisions. In particular, do not use “sort”, S already has three or four.
+I often put:
+    implicit none
+statements into Fortran routines (when the compiler accepts it) and then de- clare all objects explicitly. This can uncover problems that are not otherwise apparent.
+
+S-PLUS has facilities for returning error messages from your Fortran code called from S. You can learn about the S functions in the xerror.summary help.
+You have a choice of two Fortran subroutines—xerror and Here is exciting code that does important stuff.
+    subroutine xerrsp(x, n)
+        implicit none
+        integer n
+        double precision x(n)
+        integer i, m99l, m2l
+        character*100 m99, m2
+        real xe
+        call dblepr(’x values are’, -1, x, n)
+        m99 = "x value is negative"
+        m99l = len(m99)
+        m2 = "r1 is more than 2"
+        m2l = len(m2)
+        do i=1, n
+           if(x(i) .lt. 0.0) then
+              call xerror(m99, m99l, 99, 1)
+           endif
+           if(x(i) .gt. 2.0) then
+              xe = x(i)
+xerrwv.
+              call xerrwv(m2, m2l, 2, 1, 0, 0, 0, 1, xe, 0.0)
+           endif
+        end do
+        return
+        end
+The first four arguments to xerror and xerrwv are the same: a message, the length of the message, an error number, and an error severity. The xerror subroutine only has these arguments, but xerrwv has six more to allow you to print up to two intergers and two real values. The fifth argument is the number of integers to print—this must be 0,1 or 2. The next two arguments are the integers. The eighth argument is the number of reals to print, again this must be 0, 1 or 2. The remaining arguments are the reals to print. You will notice in the code above that there is a variable to hold the real value to be printed by xerrwv so that a real is passed in rather than a double precision. Below is the S function that calls this code.
+"fjjxerrsp"<-
+function(x)
+{
+        if(!is.loaded(symbol.For("xerrsp")))
+                poet.dyn.load("xerrsp.o")
+        xerror.clear()
+        ans <- .Fortran("xerrsp",
+                as.double(x),
+                as.integer(length(x)))[[1]]
+        if(options()$warn >= 0)
+                xerror.summary()
+ans }
+An example of what happens is:
+> fjjxerrsp(-1:3)
+x values are
+[1] -1  0  1  2  3
+recoverable error in...
+x value is negative
+ error number =     99
+recoverable error in...
+r1 is more than 2
+      in message above, r1 = 3
+ error number =      2
+           error message summary
+message start
+x value is negative
+r1 is more than 2
+ other errors not individually tabulated =
+[1] -1  0  1  2  3
+nerr     level     count
+  99         1         1
+   2         1         1
+0
+If you are using Fortran code, then there is going to be an interface between Fortran and C somewhere since S is written in C. You can push the interface down into C code that you write. You can call a Fortran routine in C by using the symbol name rather than just the routine name—C really only cares about the address of the function. The S.h include file contains macros to get this right. The other thing to note is that all of the arguments to the Fortran routine must be pointers. (Fortran only uses pointers, thus it doesn’t need the concept of “pointer”.) The PORT optimization on page 340 is an example of how to call Fortran from C.
+
+8.8 Things to Do
+
+Find portions of S functions that would benefit by being coded in C, and do it. What is the difference in execution speed? How much flexibility are you sacrificing? Can you change it so that you lose less flexibility while retaining most of the speed improvement?
+
+8.9 Further Reading
+
+The fountainhead of C is Kernighan and Ritchie (1988) The C Programming Language, 2nd Edition. This is a terse book—perhaps overly so—but care- fully written. A quite interesting book is Libes (1993) Obfuscated C and Other Mysteries.
+There is a raft of other books on C. One that I happen to have is Darnell and Margolis (1991) C: A Software Engineering Approach. I make no claims that this is the best book on C, but it is reasonably good, and it definitely is not the worst (I think I have that one also).
+
+8.10 Quotations
+
+[26] Louis Zukofsky “It’s Hard to See but Think of a Sea” 
+[27] Robert Francis “By Night”

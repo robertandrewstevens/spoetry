@@ -1,0 +1,1590 @@
+S POETRY
+by Patrick J. Burns
+
+Chapter 4: Vocabulary
+
+4.1 Efficiency
+4.2 The Apply Family
+4.3 Pedestrian
+4.4 Input and Output
+4.5 Synonyms
+4.6 Linguistics
+4.7 Numerics
+4.8 Randomness
+4.9 Graphics
+4.10 Statistics
+4.11 Under-Documented
+4.12 Deprecated
+4.13 Things to Do
+4.14 Further Reading
+4.15 Quotations
+
+This chapter introduces some of the more important functions to know. Most important is that you can find information on functions for yourself. If you are running S-PLUS on a window system, then you should use the help.start function before requesting help. There are two commands for getting help on a function or other object — the following are equivalent:
+
+help(match)
+?match
+
+You do not need to surround the name with quotes, although you may. Neither do you need quotes when you ask for the name of a help file that is not an S object:
+
+help(Syntax)
+
+In addition to the “Syntax” and “Devices” help files, the two most useful help files of this sort in S-PLUS are “Release.Notes” and “Command.edit”.
+
+You do need quotes around “illegal” names:
+
+> ?break
+? only meaningful if followed by name or call
+Dumped
+> ??
+? only meaningful if followed by name or call
+Dumped
+> ?%%
+Syntax error: sp.op ("%%") used illegally at this point:
+?%%
+> ?"?"
+> ?  # same as last command
+
+For the most part, help and ? are synonyms, but ? takes the special form “methods” which gives you a list of possible methods for a generic function. (It just looks at the names, it doesn’t check if they really are methods or not.)
+
+> ?methods(summary)
+The following are possible methods for summary
+        Select any for which you want to see documentation:
+1: summary.aov
+2: summary.aovlist
+3: summary.data.frame
+4: summary.default
+5: summary.factor
+6: summary.gam
+7: summary.glm
+8: summary.interlude
+9: summary.lm
+10: summary.loess
+11: summary.mlm
+12: summary.model.matrix
+13: summary.ms
+14: summary.nls
+15: summary.ordered
+16: summary.tree
+17: summary.varcomp
+Selection:
+
+The result is a menu. Give the number of any object you want to get help for, type 0 to exit. See more on the menu function on page 106.
+
+S-PLUS has a methods function which mimics the “?methods” form, but you get a character vector instead of a menu of options. The methods function also has a class argument so that you can discover which generic functions have methods for a specific class:
+
+> methods(class="numberbase")
+                   .Data              .Data
+ "numberbase.numberbase" "print.numberbase"
+
+Functions are categorized in the S-PLUS Reference Manual, in the S-PLUS help window, and in Appendix 3 of Becker, Chambers and Wilks (1988). Use one of these when you know what type of functionality you want but do not know the name of the function that performs it. The categorization could use some improvement, but is still useful.
+
+If your system is properly configured, you can get hard-copy versions of help files (including your own) via the help function.
+
+4.1 Efficiency
+
+Improving the efficiency of your S functions can be well worth some effort. Here are a few functions that can often be used to make your functions more direct. But remember that large efficiency gains can be made by using a better algorithm, not just by coding the same algorithm better. when the cities lie at the monster’s feet there are left the mountains. [13]
+
+Whenever you have a number of elements that are to be selected from a group of elements, match should come to mind. It can be used to avoid some loops.
+
+The match function has three arguments x, table and nomatch (the S-PLUS version also has an incomparables argument). It returns a numeric vector as long as x. The ith element of the result is the index of table that matches the ith element of x. nomatch states what should be used when the element of x doesn’t match anything in table.
+
+Although straightforward, match can be employed in a variety of ways — I always use the fact that the result has the same length as x as a hint about how to use it in a given situation.
+
+Suppose that we have two character vectors many.strings and good.strings and we want the elements of many.strings that are in good.strings. This is done with:
+
+many.strings[match(good.strings, many.strings, nomatch = 0)]
+
+A specific example is:
+
+> letters[match(c("e","D","ff","z"), letters, nomatch = 0)]
+[1] "e" "z"
+
+Let’s think about what is happening. match gives indices for its second argument — which is many.strings which is the vector being subscripted — so we have hope of getting the right subscripts. We know that the correct answer can’t be longer than good.strings, and since that is the first argument to match, that must be true. So it is certainly a feasible solution, and in fact it isn’t hard to see that it really is doing what we want.
+
+Now suppose that we have a named vector the.data and we want to remove any elements that have names in bad.ones (see the soptions function on page 45 for a similar situation). Here is one way of getting this:
+
+the.data[!match(names(the.data), bad.ones, nomatch = 0)]
+
+match returns a numeric vector that contains zeros for elements that do not match and a non-zero for those that do match a bad.ones element. The “bang” operator coerces this to logical so the subscripting vector is logical and what we want. Here is an example:
+
+> jjwt
+ dorothy harold munchkin stevie
+      14     15        2      4
+> jjwt[!match(names(jjwt), c("stevie","esther"), nomatch = 0)]
+ dorothy harold munchkin
+      14     15        2
+
+DANGER. An almost equivalent version is:
+
+the.data[-match(bad.ones, names(the.data), nomatch = 0)]
+
+This works only as long as at least one match exists. First, let’s look at what happens when it is okay. match gives indices for the names of the.data that are in bad.ones plus possibly some zeros; these are made negative and used in subscripting. The subscripting ignores the zeros and removes elements corresponding to the negative subscripts. When there are no matches, then the subscripting vector is all negative zeros, which are thought to be positive zeros, so the result of the whole operation is a vector of length zero, rather than the whole of the.data as we want.
+
+DANGER. If the elements of the table argument are not unique, only the first occurrence is used.
+
+> match(c("here","aa","b","here"), c("here",letters,"here"))
+[1] 1 NA 3 1
+
+An example of when this might come into play is selecting all of the rows of a matrix that have a column matching some values. As here where we want the rows of the matrix where the first column contains either a 1 or a 2.
+
+> jjmatr <- cbind(rep(1:3, 4), rep(1:4, rep(3, 4)))
+> jjmatr[match(1:2, jjmatr[ , 1]), ] # wrong
+     [,1] [,2]
+[1,]    1    1
+[2,]    2    1
+> jjmatr[!is.na(match(jjmatr[ , 1], 1:2, no = NA)), ] # right
+     [,1] [,2]
+[1,]    1    1
+[2,]    2    1
+[3,]    1    2
+[4,]    2    2
+[5,]    1    3
+[6,]    2    3
+[7,]    1    4
+[8,]    2    4
+
+Here is a function that uses match.
+
+p.replace <- function(x, old, new) {
+    if(length(old) != length(new))
+        stop("old and new must be same length")
+    x.ind <- match(x, old, nomatch = 0)
+    x[as.logical(x.ind)] <- new[x.ind[x.ind != 0]]
+    x
+}
+
+This substitutes values from the new argument for values in the old argument. Notice that the name begins with “p.” which is my personal prefix for modified in-built functions (see page 41). There is an in-built replace, but even if there hadn’t been, I would have wanted to put my prefix on since “replace” seems such a common name.
+
+An example of its use is:
+
+> p.replace(c("The", "corgi", "pranced", "by", "the", "corgi"),
++   old=c("corgi", "pranced"), new=c("kitty", "strolled"))
+[1] "The"      "kitty"    "strolled" "by"       "the"      "kitty"
+
+For substituting characters within strings, see the transcribe function on page 276.
+
+The match function is used in many spots, including the to.base10 function (page 236).
+
+Functionality related to that of match exists in pmatch, charmatch (both discussed on page 94) and grep (page 83).
+
+I find the outer function one of the most interesting in S. The statement
+
+outer(x, y)
+
+produces the equivalent of the mathematical statement xy′ (resulting in a matrix) when x and y are vectors. outer is much more general than this though. First off, it can use any function that is vectorized for two arguments, not just the default multiplication. An example that might be surprising is
+
+jj2let <- outer(letters, letters, paste, sep = "")
+
+This produces a 26 by 26 matrix containing each two letter combination. (Additional arguments to the function can be given — the sep = "" is passed to the paste call.)
+
+The first two arguments to outer may be arrays as well as plain vectors, the result is an array with dimension equal to
+
+c(dim(as.array(x)), dim(as.array(y)))
+
+So the command
+
+outer(jj2let, letters, paste, sep = "")
+
+produces a 26 by 26 by 26 array of all the combinations of three letters.
+
+There are times when using outer cuts down on execution time, but increases memory use — one of those unfortunate times when you must decide between evils. The interpolator.lagrange function (page 325) and exp.integral (page 272) provide examples of outer.
+
+sweep also involves arrays. If you want each element of a vector to be subtracted from the corresponding row of a matrix, then you can just rely on vectorization and automatic replication to do that:
+
+> jjmat
+     [,1] [,2] [,3] [,4] [,5]
+[1,] 1 4
+[2,] 2 5
+[3,] 3 6
+> jjmat - 1:3
+7   10   13
+8   11   14
+9   12   15
+     [,1] [,2] [,3] [,4] [,5]
+[1,]    0    3    6    9   12
+[2,]    0    3    6    9   12
+[3,]    0    3    6    9   12
+
+However, if you want the operation to be relative to columns, then sweep comes to the rescue:
+
+> sweep(jjmat, 2, 1:5, "-")
+     [,1] [,2] [,3] [,4] [,5]
+[1,]    0    2    4    6    8
+[2,]    1    3    5    7    9
+[3,]    2    4    6    8   10
+
+The “2” gives the dimension to work on — like the MARGIN argument to apply (see the next section). The 1:5 is the vector to use as the second argument to the function, and subtraction is the function being used.
+
+sweep can handle higher dimensional arrays, and any function that is vectorized on two arguments.
+
+When you have an atomic vector and you want to make it into a list with each element of the vector in some component of the list, then use split. An example is
+
+> split(state.name[1:9], state.region[1:9])
+$Northeast:
+[1] "Connecticut"
+$South:
+[1] "Alabama"  "Arkansas" "Delaware" "Florida"
+$"North Central":
+character(0)
+$West:
+[1] "Alaska"     "Arizona"    "California" "Colorado"
+
+state.region is a category that corresponds to the state.name vector. This produces a list that has one component for each category in state.region, and each of the components is a vector of the state names within the region.
+
+4.2 The Apply Family
+
+The functions apply, lapply, sapply and tapply all apply a function to sections of some object. These are used in lieu of a for loop. In general, the appropriate apply function is faster — often dramatically so — than the equivalent loop.
+
+Each of the four apply functions have an argument named FUN which can be either a function or the name of a function. All three of the following are essentially equivalent:
+
+lapply(jjl, "mean")
+lapply(jjl, mean)
+lapply(jjl, function(x) sum(x)/length(x))
+
+The first two are the same in the sense that the same function is applied. The second two are the same in the sense that a function (rather than the name of a function) is being passed into lapply as the FUN argument.
+
+Each apply function also accepts an arbitrary number of additional arguments to be given to FUN. There’s an example of this on page 28.
+
+The apply function is for arrays. When you use apply, the MARGIN argument specifies the dimensions that you want to keep. So a statement like
+
+apply(xmat, 2, myfun)
+
+saves the second dimension while the first dimension (and any others) are “collapsed” into the function call. For higher dimensional arrays, the MARGIN can have length greater than one; these again are the dimensions to be saved.
+
+DANGER. When the function used in apply returns a vector, then that becomes the first dimension of the array that is returned. So a command like:
+
+apply(freeny.x, 1, sort)
+
+will return the transpose of what you would naively expect. The stable.apply function on page 287 can be used to keep the dimensions of the result in the same order as those of the input.
+
+In recent versions of S-PLUS, the apply functions offer a speed advantage over the equivalent for loop. Here is a function to sort the columns of a matrix using a loop and an equivalent function using apply.
+
+fjjcsort1 <- function(x) {
+    for(i in 1:ncol(x)) {
+        x[, i] <- sort(x[, i])
+    }
+    x 
+}
+
+fjjcsort2 <- function(x) {
+    apply(x, 2, sort)
+}
+
+Note that it seems unlikely that you would really want to do such an operation. As always, we want to test that they do the same thing — no matter how obvious.
+
+> all.equal(fjjcsort1(freeny.x), fjjcsort2(freeny.x))
+[1] T
+> dim(jjm)
+[1]   20 1000
+> dim(jjm2)
+[1]    20 10000
+
+Using two different sizes of matrix we time these two versions.
+
+> p.unix.time(for(i in 1:10) fjjcsort1(jjm))
+ comp time clock time  memory
+     42.24         43 3088936
+> p.unix.time(for(i in 1:10) fjjcsort2(jjm))
+ comp time clock time  memory
+     34.02         35 3695144
+> p.unix.time(fjjcsort1(jjm2))
+ comp time clock time  memory
+     45.49         46 7459368
+> p.unix.time(fjjcsort2(jjm2))
+ comp time clock time   memory
+     39.12         40 21688872
+
+We can see that apply does indeed improve the speed. There is an indication, though, that memory use could be a problem with the apply version.
+
+Always it is going to be more efficient if you can vectorize the problem. This problem seems unamenable to doing it all at once, but there is a trick that works (that I wish I’d thought of myself).
+
+fjjcsort3 <- function(x) {
+    xatt <- attributes(x)
+    ans <- x[order(col(x), x)]
+    attributes(ans) <- xatt
+    ans
+}
+
+After making sure that it does what we want, we time it like the others:
+
+> p.unix.time(for(i in 1:10) fjjcsort3(jjm))
+ comp time clock time  memory
+  9.130001          9 2875944
+> p.unix.time(fjjcsort3(jjm2))
+ comp time clock time   memory
+     13.25         14 14856744
+
+Now we have some substantial speed improvement. 
+
+lapply applies a function to each component of a list:
+
+> lapply(list(a = jjm, b = t(jjm)), dim)
+$a:
+[1] 5 3
+$b:
+[1] 3 5
+
+sapply is used in the same situations as lapply, but generally returns a simplified object. When the function being applied returns a single number in each case, then the result of sapply is the same as unlist of the same call to lapply. If the function returns vectors that are all one length, then these two are different:
+
+> unlist(lapply(list(a = jjm, b = t(jjm)), dim))
+ a1 a2 b1 b2
+  5  3  3  5
+> sapply(list(a = jjm, b = t(jjm)), dim)
+     a b 
+[1,] 5 3 
+[2,] 3 5
+
+sapply produces a matrix when all of the results are the same length. If the results vary in length, then sapply is the same as lapply.
+
+DANGER. Internal generic functions (see page 225) do not work correctly in lapply or sapply.
+
+> lapply(list(jjm, as.data.frame(jjm)), dim)
+[[1]]:
+[1] 5 3
+[[2]]: 
+NULL
+
+The workaround is to write a wrapper function:
+
+> lapply(list(jjm, as.data.frame(jjm)), function(x) dim(x))
+[[1]]:
+[1] 5 3
+[[2]]: 
+[1] 5 3
+
+This bug has sometimes been attributed to the fact that lapply is internal in recent versions of S-PLUS, but the output above was from Version 3.1 where lapply uses a for loop.
+
+lapply and sapply can take a vector as their first argument. One use of this is to apply functions where you want more than one of the arguments to change. The following example assumes that we have two lists of matrices and we want the result to be a list whose components are the products of the corresponding components of the original lists.
+
+> lapply(seq(along=jjalist), function(i, x, y)
++         x[[i]] %*% y[[i]], x = jjalist, y = jjblist)
+
+The trick is to write a function whose first argument is used to subscript the other arguments.
+
+The following three vectors are used in the discussion of tapply.
+
+> jjwt
+ dorothy harold munchkin stevie
+      14     15        2      4
+> jjgender
+[1] "female" "male"   "female" "female"
+> jjtype
+[1] "corgi" "corgi" "cat"   "cat"
+
+tapply is used in situations where you have one or more categories, but there is not necessarily an equal number of points in each combination of categories. This is sometimes called a ragged array. Here we look at the mean of jjwt within each combination:
+
+> tapply(jjwt, list(jjgender, jjtype), mean)
+       cat corgi
+female   3    14
+  male  NA    15
+> mode(.Last.value)
+[1] "numeric"
+
+This is a typical numeric matrix, but with a missing value because there are no male cats. However, the result of the following command gives us a matrix of the same shape again, but this time the mode of the matrix is list:
+
+> jjlistmat <- tapply(jjwt, list(jjgender, jjtype), function(x) x)
+> jjlistmat
+              cat corgi
+female numeric, 2 14
+  male NULL, 0    15
+> jjlistmat["female", "cat"]
+[[1]]:
+munchkin stevie 24
+> jjlistmat["female", "cat"][[1]]
+ munchkin stevie
+        2      4
+> jjlistmat["female", "corgi"]
+[[1]]:
+dorothy 14
+
+Version 3.4 of S-PLUS added a simplify argument to tapply which you can set to FALSE to ensure that you always get an object of mode list.
+
+The FUN argument is optional in tapply. When FUN is not given, then the result is a vector of indices into the array that is created when FUN is given. (Logically, the first argument could be optional when FUN is missing since its values are not used, but it is used for its length, and hence still required.) Here we use tapply without FUN to produce a vector to be used by split:
+
+> split(jjwt, tapply(jjwt, list(jjgender, jjtype)))
+$"1":
+munchkin stevie
+       2      4
+$"3":
+ dorothy
+      14
+$"4": 
+harold
+    15
+
+The names of this list show that tapply did return the indices for jjlistmat.
+The last two results are essentially equivalent.
+
+We can make the list that split creates look more inviting by changing the category we give it:
+
+> split(jjwt, paste(jjgender, jjtype))
+$"female cat":
+munchkin stevie
+       2      4
+$"female corgi":
+ dorothy
+      14
+$"male corgi":
+ harold
+     15
+
+An alternative to tapply that is in S-PLUS is by. This is object-oriented
+and can do some things that tapply can’t.
+
+4.3 Pedestrian
+
+First is a list of the truly pedestrian, few of these functions will be discussed more than briefly. The apparition of these faces in the crowd; [14]
+
+abs sqrt exp log log10 sum prod cumsum cumprod min max
+pmin pmax cummin cummax range gamma lgamma
+
+round signif trunc ceiling floor
+
+sin cos tan asin acos atan
+sinh cosh tanh asinh acosh atanh
+
+Re Im Mod Arg Conj
+
+length c list unlist names attributes attr array
+dim dimnames unique duplicated
+
+matrix nrow ncol row col rbind cbind t crossprod
+solve backsolve eigen svd qr chol kronecker
+
+scale interp approx fft
+
+Most of the mathematical functions accept complex as well as numeric inputs. Functions that are S-PLUS additions that may not be in other versions are cumprod, cummax, cummin and kronecker.
+
+The rep function — one of the most useful in S — was discussed earlier. If you missed it, go back to page 29.
+
+The order function produces the vector of indices that will sort a vector. That is,
+
+x[order(x)]
+
+is the same as
+
+sort(x)
+
+order is useful when you want to sort several vectors in parallel:
+
+xord <- order(x)
+xsort <- x[xord]
+ysort <- y[xord]
+
+xsort is actually sorted; ysort probably isn’t sorted but it is in the order that made x sorted. A more common example is to sort the rows of a matrix relative to one of the columns:
+
+xmat[order(xmat[,1]), ]
+
+If the order to use depends on more than one vector — with secondary vectors breaking ties — then order is also used:
+
+xyzord <- order(x, y, z)
+
+An example of this use is in the fjjcsort3 function on page 77.
+
+To reverse the order of a vector or list, use the rev function. So you might have
+
+xord.bigfirst <- rev(order(x))
+
+paste is very useful for dealing with character data. Any number of arguments can be given to it plus the two special arguments sep and collapse (which must be given by their full names). A character vector is created which is as long as the longest argument, shorter arguments are replicated. The sep argument is a character string that is placed at each spot that is pasted together. The collapse argument turns the result into a single string. The command
+
+paste(1:9, "000", sep = ",", collapse = " ")
+
+results in the single string
+
+"1,000 2,000 3,000 4,000 5,000 6,000 7,000 8,000 9,000"
+
+nchar returns a vector which is the count of the number of characters in each element of its argument. For example
+
+nchar(state.name)
+
+is a numeric vector of length 50 containing the number of letters (and spaces) in each state name.
+
+DANGER. Note that backslash-something counts as just one character, not the number of keystrokes that you need to type to get it.
+
+substring takes a character vector, a numeric vector of the first character to be used, and a numeric vector of the last character to be used (which defaults to some large number). These arguments are replicated to each be as long as the longest, and the result is a vector of substrings. To break a string into individual characters do:
+
+substring(x, 1:nchar(x), 1:nchar(x))
+
+If for a particular element last is less than first, then the result for that element will be the empty string. In particular, last can be zero.
+
+grep returns the indices of a character vector (second argument) that match the pattern (first argument). When you use the grep function, it is tempting to think of Unix wildcarding as with Unix ls. This is especially true when using the pattern argument to objects which creates a call to grep. But instead you need to think of regular expressions.
+
+DANGER. The behavior of grep may be somewhat machine dependent.
+
+> jjgreptest
+[1] "abc"     "a.bc"    "a\\bc"   "a\tbc" "aabbcc"
+> grep(".", jjgreptest) # finds everyone
+[1] 1 2 3 4 5
+> grep("\.", jjgreptest) # still finds everyone
+[1] 1 2 3 4 5
+> grep("\\.", jjgreptest) # finds the dot
+[1] 2
+
+Now I search for backslashes:
+
+> grep("\\\\\\\\", jjgreptest)
+[1] 3
+
+There are 8 backslashes in the command above — escape characters grow in powers of two.
+
+> grep("\\\t", jjgreptest)
+[1] 4
+
+DANGER. If there are any newlines in your strings, you are in trouble:
+
+> jjgreptest2
+[1] "abc"     "a.bc"    "a\\bc" "a\nbc" "aabbcc"
+> length(jjgreptest2)
+[1] 5
+> grep("bc", jjgreptest2)
+[1] 1 2 3 5 6
+
+It is a little unusual to see something in the 6th element of a 5-element vector.
+
+A couple of specialized S functions that deal with character strings are abbreviate and make.names.
+
+Access Unix functionality with the unix function. The first argument is a character string that gives the Unix command. The output argument is an important control:
+
+> jjd1 <- unix("date")
+> jjd1
+[1] "Wed Mar 26 15:22:23 PST 1874"
+> jjd2 <- unix("date", out = F)
+Mon Nov 28 15:22:45 GMT 1757
+> jjd2
+[1] 0
+
+When output is TRUE (the default), then the output of the Unix command is captured in an S character vector (one element for each line of the output) and returned. If output is FALSE, then the output of the command goes to standard-out and the return value in S is the status of the Unix command. The Unix convention is that 0 means no problem and a non-zero value means some type of error. So S code might look something like:
+
+if(status <- unix(cmd, out = F))
+     stop(paste("Unix trouble, code", status))
+
+If you have several commands, you need to put them all into one string with the commands separated by semicolons or newlines:
+
+> cmds <- c("date", "echo $SHOME")
+> unix(paste(cmds, collapse = ";"), out = F)
+Sun Oct 14 20:51:20 EST 1894
+/usr/lang/s
+[1] 0
+
+There is also an input argument to unix. This is seldom used since usually inputs are contained in the command argument. The perl function (page 275) provides a good example of the use of the input argument.
+
+In S-PLUS there is also the unix.shell function which allows you to select the shell that will be used rather than being forced to use the Bourne shell:
+
+> unix("echo $shell")
+[1] ""
+> unix.shell("echo $shell", shell = "/bin/sh")
+[1] ""
+> unix.shell("echo $shell", shell = "/bin/csh")
+[1] "/bin/csh"
+
+Arrays are generally created with the array function. You may create ma- trices either with array or with matrix. The advantage of array is that it is slightly faster (matrix calls array). The advantages of matrix are that you only need to know one of the dimensions and you can choose to fill along either columns or rows.
+
+The diag function also creates matrices. The behavior of this function is highly dependent on its argument. if you give it a single number, it returns an identity matrix of that size:
+
+> diag(3)
+     [,1] [,2] [,3]
+[1,]    1    0    0
+[2,]    0    1    0
+[3,]    0    0    1
+
+If you give it a vector, it returns a square matrix with that vector along its diagonal:
+
+> diag(c(4.3, 5.7, -2.9))
+     [,1] [,2] [,3]
+[1,]  4.3  0.0  0.0
+[2,]  0.0  5.7  0.0
+[3,]  0.0  0.0 -2.9
+
+If you give it a matrix, it returns the diagonal of the matrix:
+
+> diag(freeny.x)
+[1]  8.79636  4.70217  5.83112 12.98060
+> diag(as.matrix(3))
+[1] 3
+
+There are arguments to control the shape of the result, and there is an assignment form to change the diagonal of a matrix.
+
+DANGER. When an array with three or more dimensions is given to diag, then it is treated as a simple vector (creates a large diagonal matrix) rather than extracting some definition of the diagonal from the array.
+
+lower.tri returns a logical matrix the same size as its argument. Its value is TRUE for all elements below the diagonal. The S-PLUS (version 3.2 and later) version of the function has a diag argument that allows the diagonal elements to be TRUE also. Similar functionality can be achieved with row and col; for example, to get the super-diagonal do:
+
+> row(jjmat) - col(jjmat) == -1
+     [,1] [,2] [,3] [,4] [,5]
+[1,]    F    T    F    F    F
+[2,]    F    F    T    F    F
+[3,]    F    F    F    T    F
+[4,]    F    F    F    F    T
+[5,]    F    F    F    F    F
+
+A command like
+
+solve(A) %*% x # avoid this
+
+is an inefficient use of solve. The reason that solve is not called something like invert is precisely this case. We don’t really care about the inverse of A, we only want the final answer. The more efficient command is:
+
+solve(A, x)
+
+backsolve is available when you have a triangular set of equations to solve.
+
+Given one or more vectors that can be thought of as categories, the table function counts up the number of occurrences in each combination. It is called “table” because of the statistical concept of a contingency table, but nonstatisticians may think of it as a binning function.
+
+> table(jjgender)
+ female male
+      3    1
+> table(jjtype)
+cat corgi
+  2     2
+> table(jjgender, jjtype)
+       cat corgi
+female   2     1
+  male   0     1
+
+Somewhat related is the cut function. While table counts the number of occurrences of categories, cut breaks numerical data into categories. This is another sense of binning.
+
+DANGER. Do not abbreviate the breaks argument of cut to break:
+
+> cut(jjwt, break=seq(0, 25, by = 5))
+Syntax error: "=" used illegally at this point:
+cut(jjwt, break=
+
+break is a reserved word in S, so the parser is ever on the lookout for it. Any of the following forms are acceptable though:
+
+> cut(jjwt, brea = seq(0, 25, by = 5))
+[1] 3 3 1 1
+attr(, "levels"):
+[1]"0+thru 5""5+thru10""10+thru15" [4] "15+ thru 20" "20+ thru 25"
+> cut(jjwt, breaks = seq(0, 25, by = 5))
+[1] 3 3 1 1
+attr(, "levels"):
+[1]"0+thru 5""5+thru10""10+thru15" [4] "15+ thru 20" "20+ thru 25"
+> cut(jjwt, "break"=seq(0, 25, by = 5))
+[1] 3 3 1 1
+attr(, "levels"):
+[1]"0+thru 5""5+thru10""10+thru15" [4] "15+ thru 20" "20+ thru 25"
+
+Order dependent counting is done with the S-PLUS function rle (run-length encoding).
+
+The diff function performs differencing of successive elements. When x is a vector, then
+
+diff(x)
+
+is equivalent to
+
+x[-1] - x[-length(x)]
+
+however, diff has arguments to control the number of differences, and the lag. Also diff does each column of a matrix separately.
+
+aperm stands for array dimension permutation. Consider the three-dimensional array:
+
+> jja
+,,1
+[,1] [,2] [,3]
+[1,]    1    3    5
+[2,]    2    4    6
+,,2
+[,1] [,2] [,3]
+[1,]    7    9   11
+[2,]    8   10   12
+,,3
+[,1] [,2] [,3]
+[1,]   13   15   17
+[2,]   14   16   18
+,,4
+[,1] [,2] [,3]
+[1,]   19   21   23
+[2,]   20   22   24
+> dim(jja)
+[1] 2 3 4
+
+aperm is usually used with two arguments — the array to be permuted and the permutation. The ith element of the permutation vector is the dimension in the current array that will be the ith dimension in the resulting array.
+
+> aperm(jja, c(2,3,1))
+,,1
+[,1] [,2] [,3] [,4]
+[1,]    1    7   13   19
+[2,]    3    9   15   21
+[3,]    5   11   17   23
+,,2
+[,1] [,2] [,3] [,4]
+[1,]    2    8   14   20
+[2,]    4   10   16   22
+[3,]    6   12   18   24
+
+If the ith element of the vector that you have contains the dimension in the result that is the ith current dimension, then use order on the vector:
+
+> aperm(jja, order(c(2,3,1)))
+,,1
+[,1] [,2]
+[1,]    1    2
+[2,]    7    8
+[3,] 13 14
+[4,] 19 20
+,,2
+[,1] [,2]
+[1,]    3    4
+[2,]    9   10
+[3,]   15   16
+[4,]   21   22
+,,3
+[,1] [,2]
+[1,]    5    6
+[2,]   11   12
+[3,]   17   18
+[4,]   23   24
+
+Let’s review. If the values are for the input and the indices are for the result, then the vector is appropriate to use as the perm argument. If the values for the result and the indices are for the input, then you need to use order.
+
+Be careful when testing with three-dimensional arrays since (2,3,1) and (3, 1, 2) are the only permutations that do not map to themselves.
+
+> jjperm3
+     [,1] [,2] [,3] [,4] [,5] [,6]
+[1,]    1    1    2    2    3    3
+[2,]    2    3    1    3    1    2
+[3,]    3    2    3    1    2    1
+> jjperm3o <- apply(jjperm3, 2, order)
+> jjperm3o
+     [,1] [,2] [,3] [,4] [,5] [,6]
+[1,]    1    1    2    3    2    3
+[2,]    2    3    1    1    3    2
+[3,]    3    2    3    2    1    1
+> apply(jjperm3 != jjperm3o, 2, all)
+[1] F F F T T F
+> jjperm3[,.Last.value]
+     [,1] [,2]
+[1,]    2    3
+[2,]    3    1
+[3,]    1    2
+
+The .Machine object is a list of the machine constants, like largest integer and epsilon. It is often useful to pass pieces of this into C or Fortran code that you have written to eliminate machine dependency of your S functions. pi is another number that is a part of the S language.
+
+4.4 Input and Output
+
+Commonly a more frustrating part of computing is getting data from one pro- gram to another. S is no exception. Essentially all data that have not already been made into S objects must come into S via scan, which reads ASCII data. The use of scan ranges from very simple, to exceptionally complicated. A strange, but at times useful, way to use scan is to read from standard input rather than from a file — cutting numbers from some window and pasting to the S session is one example. In the remainder of the discussion of scan, the input will be assumed to be a file.
+
+If a simple vector is to be read in, then you merely need to give the name of the file and possibly an indication of what mode to give the data (numeric is the default). Otherwise, the file is assumed to be in the form of records and fields. Typically there is one record per line in the file, but this is not mandatory. By default, fields are assumed to be separated by white-space, that is, by spaces, tabs or newlines. The sep argument to scan controls the separation character, and this default is denoted by sep = "". (Since a separator of no characters doesn’t make sense, the empty string was available for a compound choice.) If the file contains strings containing spaces, then the default separator will not work. Tabs and semicolons are popular choices for separators. Only the first character of the sep argument is used.
+
+Once past the problem of the separator, the key argument to scan is what. The what argument provides a template for the resulting object. Here are three examples:
+
+jjnum <- scan("numbers.txt")
+jjchar <- scan("text.txt", "", sep = "\t")
+jjrecords <- scan("records.txt", 
+                  list(name = "", age = 0, NULL, volume = 0), sep = ";")
+
+The first example is with a file that contains a bunch of numbers separated by white-space; the result, jjnum, is a numeric vector. The second example yields a character vector and the separator is a tab, presumably to allow spaces within strings. The final example will result in a list with four components. The first component will be named "name", will be character, and will be read from the first field of each record. The second component is numeric and corresponds to the second field in the file. The third field is not read because of the NULL in the third component of the what argument, and this component will be NULL in jjrecords. The fourth component is once again numeric. If the file contained more than four fields per record, or if not all records were on a single line, then the statement above would be wrong. The flush argument allows you to ignore unused fields, and multi.line allows records to span more than one line in the file.
+
+If your file is in fixed format (meaning each field takes a certain number of characters), then there are two ways of getting the data read in. The easiest if you have S-PLUS is to use the widths argument to scan, which takes a vector of the field widths. The other way is to use make.fields which creates a new file that contains the fields interspersed with a separator.
+
+If there are some parts of the file that you don’t want to read in, then use the skip and n arguments. skip says how many lines at the top of the file not to read. The main purpose of this argument is when there is header information that does not look like the actual data. The n argument says how many items in all (records times fields) are to be read.
+
+Some files don’t conform to the records and fields format, and it seems impossible to get what you want. There are two strategies you can use, possibly even in conjunction. You can read everything into S — probably all as character — and straighten it out with S commands. You can use tools like Perl, awk and sed to convert the file to a more hospitable format.
+
+If you are reading in a large object and you know how big it is, then you can save some memory by creating the what argument to be the same size as the final result. As scan reads the file, it keeps increasing the size of where it is putting the data. This wastes memory in two ways. It grows the objects incrementally so it fragments memory some, and the last time that it grows, it almost surely will overshoot the size that it needs.
+
+DANGER. You will probably have problems if you try to read in numbers that were double-precision Fortran. Fortran uses a “d” rather than an “e” to indicate the exponent. scan does not understand the “d” and assumes that the value is not a valid number. You need to convert (carefully) the “d”s to “e”s before using scan. (Or possibly read them into S as character, and then do the conversion.)
+
+If your file is very nicely arranged in records and fields, then you can use read.table to read the file and return a data frame. It does accept fixed format files.
+
+DANGER. There is no free lunch. The convenience of read.table is dimin- ished by the fact that it will decide on its own to use a field as the row names of the result. The field will then not appear in the data frame. I suggest that you always give a value for the row.names argument to avoid surprises.
+
+For transferring S objects around, see the discussion starting on page 96
+regarding data.dump, dump, data.restore, source and restore.
+
+S-PLUS (and statlib) has a sas.get function to import data from SAS. There are also several commercial programs that allow easy transfer between a number of packages including S.
+
+print and cat both create printed output, but in most other respects are quite different. print produces representations of S objects, while cat is a low-level function that interprets character strings. If you print a character string with a backslash-n in it, then the backslash-n will be visible within the string (and the string will generally be surrounded by quotes). But if you cat that same string, then the text following the backslash-n will be on the next line of output — cat interprets the backslash-n rather than just reproducing it. print is a generic function, and many print methods use cat to do part of the printing.
+
+> print("\\blah\nblah")
+[1] "\\blah\nblah"
+> cat("\\blah\nblah")
+\blah
+blah>
+
+Notice that the S prompt is directly after the string that was catted. This is because there was not a backslash-n at the end of the string.
+
+When you are writing a print method, the last line of the function should be:
+
+invisible(x)
+
+This makes the return value x while avoiding an infinite loop of printing. The name of the argument should definitely be x (see the discussion of arguments to generic functions on page 128). The reason to have the return value be the input is so that
+
+jj <- print(myfun())
+
+will work the same as
+
+jj <- myfun()
+print(jj)
+
+You also want to have the ... form in the argument list of your print methods. Often your print method will call print and you can pass ... to those calls. Even if you don’t have print calls, you want ... because your method may be called by another print call that uses arguments that your method does not have. An example would be if an object of your class is in a list that is printed.
+
+While print always prints to standard-out, you can tell cat to send its characters to a file. cat takes an arbitrary number of arguments — each element of the first argument is printed, then each element of the second argument and so on. There are numerous additional arguments to cat to control its output. Note that cat does not obey the digits option, as print and format do. Thus numbers printed by cat have their full precision.
+
+The format function is mainly used to turn numbers into suitably aligned character strings. It returns strings that all have the same number of characters. In S-PLUS version 3.2 and later, you can control whether or not numbers are written in scientific notation among other features. Notice the blank spaces so that the decimal points line up:
+
+> format(c(222, pi))
+[1] "222.000000" "  3.141593"
+> as.matrix(format(c(222, pi)))
+             [,1]
+[1,] "222.000000"
+[2,] "  3.141593"
+
+See the justify function on page 278 for similar functionality.
+
+Although write is likely to fool you more than help you, the S-PLUS function write.table is useful. write.table writes a matrix or a data frame to an ASCII file as you would expect it to be written.
+
+The sink function allows you to send the output from S commands to a file. Unfortunately in version 3 of S there is no convenient way to send the output both to the screen and to the file. Here is an example of how to put both the S commands and their results into a file:
+
+> options(echo = T)
+> sink("jj.out")
+sink("jj.out")
+> freeny.x
+> sink()
+> 1:3
+1:3
+[1] 1 2 3
+> options(echo = F)
+options(echo = F)
+
+The echo option, if TRUE, means that the command is repeated, and hence it ends up in the sink file. We can see what happens after the second sink command (with no arguments) which changes the output back to normal. The echo option doesn’t take effect until after the option call.
+
+DANGER. If you are using a version of S prior to S-PLUS version 3.4, you can not nest sink commands. In the older versions, each call to sink rescinds the previous one. In particular, dump uses sink so if you use dump while a sink is in effect, the dump command will work okay but your sink will be wiped out — output will go to standard-out as usual.
+
+4.5 Synonyms
+
+This section discusses functions that are similar to another. Understanding the differences can speed programming and eliminate bugs. We can find no scar, But internal difference, Where the meanings, are – [15]
+
+When you have a vector of strings to match and they are possibly abbre- viated, then match won’t do. What does work is pmatch, and charmatch in S-PLUS. (These two functions were produced at about the same time in two different locations.) They are almost identical in effect, the main difference occurs when there is an ambiguous match.
+
+The following commands have ambiguous matches for "Ala" and "New" since both "Alaska" and "Alabama" partially match "Ala", and several state names begin with "New".
+
+> pmatch(c("Ala", "Mont", "New"), state.name)
+[1] NA 26 NA
+> charmatch(c("Ala", "Mont", "New"), state.name)
+[1] 026 0
+> pmatch(c("Ala", "Mont", "New"), state.name, nomatch = Inf) 
+[1] Inf 26 Inf
+
+pmatch considers an ambiguous match to be nomatch while charmatch always returns 0 for an ambiguous match.
+
+There are two additional differences between them. The first is that pmatch does not match empty strings:
+
+> charmatch("", c(letters, ""))
+[1] 27
+> pmatch("", c(letters, ""), nomatch=0)
+[1] 0
+
+The second is that pmatch has a duplicates.ok argument.
+
+> pmatch(c("a", "b", "a"), letters) 
+[1] 1 2 NA
+> pmatch(c("a", "b", "a"), letters, dup=T)
+[1] 1 2 1
+> charmatch(c("a", "b", "a"), letters)
+[1] 1 2 1
+
+charmatch forces duplicates to be okay.
+
+The unabbrev.value function (page 218) uses pmatch.
+
+The rm function is a short cut for remove. remove takes a character vector of the names of the objects to be deleted. rm just takes the unquoted names of the objects. The two following commands would do the same thing:
+
+remove(c("jja", "jj45"))
+rm(jja, jj45)
+
+rm removes objects only from the working database; remove has arguments where and frame so that you can select the location of the deletions.
+
+The seq function is a generalization of the : operator, which it calls. The : operator is usually given integers, and always steps 1 or -1. seq allows arbitrary step sizes (the default is 1), starting point (the default is 1), ending point (the default is 1), and length.
+
+A handy argument is along. The statement
+
+seq(along = x)
+
+returns a sequence starting at 1 that is as long as x. The important part is that if x has length zero, then the sequence has zero length also — this is very useful in for loops.
+
+The if construct, the ifelse function, and the operators &&, &, || and | are all related. if takes a logical value that is meant to be just one long; if the length is greater than one, then the first value is used and a warning is issued:
+
+> if(c(F, T)) "true" else "false"
+[1] "false"
+Warning messages:
+  Condition has 2 elements: only the first used in:
+        if(c(F, T)) "true" else "false"
+
+Do not ignore such warnings — it means you have at least done something silly and more likely that there is a bug. You may have forgotten to use any or all.
+
+The && (and control operator) and || (or control operator) operators go with if and length one logicals. These do not evaluate their second argument if they already know the answer; for instance || does not need to look at the second argument if the first one is TRUE.
+
+On the other hand, & and | are vectorized “and” and “or” operators, so it is not appropriate that they should reserve judgment on evaluating their second argument. The ifelse function performs a vectorized decision, so it needs to use & and |. By the way, there is the xor function which performs a vectorized exclusive-or operation.
+
+ifelse is very S in being vectorized, but it is less useful than you might think. For instance, the statement:
+
+x <- ifelse(is.na(x) | x < 0, 0, x)
+
+which changes missing values and negatives in x to 0, can be done more directly with
+
+x[is.na(x) | x < 0] <- 0
+
+Let’s summarize. Suppose we have two (length one) logical values called logical.val1 and logical.val2, and we have two logical vectors with length greater than one called logical.vec1 and logical.vec2. Then here are several statements and their acceptability:
+
+if(logical.val1 && logical.val2) 0 else 1 # correct
+ifelse(logical.vec1 & logical.vec2, 0, 1) # correct
+if(logical.val1 & logical.val2) 0 else 1 # slightly inefficient
+if(logical.vec1 && logical.vec2) 0 else 1 # wrong
+if(logical.vec1 & logical.vec2) 0 else 1 # wrong
+ifelse(logical.vec1 && logical.vec2, 0, 1) # wrong
+ifelse(logical.val1 & logical.val2, 0, 1) # slightly inefficient
+
+There are two ways of putting ASCII representations of S objects into files. (If you want just the values without retaining the characteristics of the S object, then use write.table (page 93) or cat.) dump creates representations that are (relatively) easy for humans to comprehend — the format is S commands. data.dump also produces ASCII files, but the format is decidedly tailored towards machines rather than humans. The reason that there are two choices is that files created by dump can take an enormous amount of memory (and hence time) when they are read back into S. The larger the size of the objects, the more problem there is with restoring a dump file. Since functions are generally small and commonly read by humans, dump is usually used for them. Most often data.dump should be used for other types of objects.
+
+If a file was produced by data.dump, then it must be read back into S with data.restore. There are several ways to read files created by dump. The most common is to use source. restore is almost like source, but there is a difference that can be important. Essentially, source acts as if the contents of the file were typed to S, but restore starts up a new session of S and reads the file. So restore always puts the objects into the working database for the current directory, while source puts the objects into the current working database. Because restore starts up a new session, there are going to be implications for memory usage. Yet another way to read a dump file into S is to redirect the file while you are in Unix. For example:
+
+% S < myfile.q  # Unix command
+
+This also puts the objects into the working database for the current directory.
+
+storage.mode and mode always give the same answer, unless the mode of the object is numeric. In that case storage.mode is one of "double", "single" or "integer". Storage mode is generally only of interest when using .C or .Fortran.
+
+The class function returns the value of the "class" attribute of an object. data.class does the same if the object has a "class" attribute, but can return something other than NULL for objects that do not have a class. This looks to see if it is one of the types of object that was in common use before object- orientation came along. The possibilities are "matrix"; "array" for arrays that are not matrices; "ts" for time series; plus categories yield the class they would have if they were factors.
+
+In S-PLUS there are functions called which.na, which.inf and which.nan. These are like is.na, etcetera, except that they return a vector of numeric indices rather than a logical vector. The result of which.na is the indices of the result of is.na that are TRUE. If you expect an object to be large and to have few missing values, then using which.na instead of is.na can save a substantial amount of memory. If x has length one million and contains ten missing values, then the length of the result of is.na is one million while the result of which.na is only ten long.
+
+The max and min functions each return a single number that is the maximum or minimum of all of the numbers in all of the arguments. There are times when you want a vectorized form that gives the maximum or minimum for each location among a number of vectors — the pmax and pmin functions do this. Compare:
+
+> pmin(1:10, 10:1)
+[1] 1 2 3 4 5 5 4 3 2 1
+> min(1:10, 10:1)
+[1] 1
+
+DANGER. It is not so uncommon to have a bug because max is used where pmax is needed. These are especially hard to discover and track down. A little extra thought whenever you use max or min can be a good thing.
+
+The deparse and as.character functions both turn non-character objects into something of mode character. deparse, as its name implies, returns a character string that can be parsed by S, the length of the result of deparse is usually 1 (but not guaranteed to be). as.character thinks in terms of vectors and always returns an object that has the same length as the input. Using as.character where deparse is needed can cause some subtle bugs.
+
+4.6 Linguistics
+
+Use stop to create an error condition in a function. If the problem is not serious enough to warrant an error but is still worth mentioning, then use warning. A few pointers are given on placing calls to stop and warning on page 33.
+
+Do not confuse warning with warnings. warning is used within functions to create a warning. warnings is used to look at the warnings that were created if there were a lot of them.
+
+The exists function takes a character string containing the name of an object and returns a logical value that states whether or not the object was found. Arguments can be used to direct the search. This is useful to avoid an error when the object does not exist. An example is the poet.dyn.load function on page 24.
+
+The get function goes further than exists and returns the object if it is found (an error results if it isn’t found, hence one use for exists). Most of the time get is unnecessary because just giving the name of the object gets it. But get has several uses. It is used when what you have is a character string containing the object name, rather than the name itself. The following fragment should give an indication of when this might occur:
+
+for(i in 1:n) get(paste("data", i, sep = ""))
+
+It is used when the name does not parse to a valid object name:
+
+get("dim<-")
+get("%*%")
+get("valid_name_in_other_language")
+"[<-.mathgraph" <- emacs(get("[<-.mathgraph"))
+
+It is used when there is more than one instance of an object name on the search list, and you want one of the ones that is not first:
+
+get("x", where = 4)
+
+It is used when the object is in a database that is not currently on the search list, or that at least is not guaranteed to be on it.
+
+DANGER. The first argument needs to be a string that is the name of the object as S knows it. Do not include any of the path for the database there:
+
+get("/usr/me/good.data/x") # probably not what you want
+get("x", where = "/usr/me/good.data") # more likely right
+
+You can sometimes save some memory with a statement like:
+
+get("x", immediate = T)
+
+This says that you want x but you only care about it for this one instance so it should not be cached for future reference. The cache that we are avoiding here starts when a statement is evaluated and is destroyed again when we get back to the S prompt — it is not the same cache that the keep option controls.
+
+The assign function is in a sense the opposite of get, and is used for many of the same reasons. You can use it whenever an assignment is made (that is, it is a synonym for <-), but there are times when you must use it. Use it when what you have is a character string of the name rather than the name itself.
+
+for(i in 1:n) assign(paste("data", i, sep = "."),
+    scan(paste("file", i, sep = "")))
+    
+You can use quotes around a name that is being assigned to:
+
+"%myop%" <- fjj
+
+So assign is not necessary here, even if the name is not a valid S name.
+
+DANGER. You can not have a function on the left of an assignment operator that returns a character string of the names:
+
+paste("data", i, sep = "") <- 1:i # THIS WON’T WORK 
+
+The assign function is necessary in this case. 
+
+assign(paste("data", i, sep = ""), 1:i)
+
+A common use of assign is to assign an object to a location other than the usual location. From the prompt, this is generally a database later in the search list:
+
+assign("jj", jj, where = 4)
+
+Within a function, this is usually assignments to frame 1 or database 0:
+
+assign("fjJ.X", x, frame = 1)
+
+Within a function you can also force the assignment to be written to disk immediately rather than only being written as you get the S prompt back. An example is:
+
+assign("jj", jj, where = 1, immediate = T)
+
+This form of statement can be very useful, but it is a definite violation of the no side effects rule — use this sparingly and with good reason.
+
+DANGER. A statement like 
+
+assign("x$new", 3)
+
+does not do anything to a component of an object named x. Rather it creates an object with the unfriendly name x$new:
+
+> x
+$a: 
+[1] 1
+> assign("x$new", 3, where = 1) 
+> x
+$a:
+[1] 1
+> get("x$new")
+[1] 3
+
+You need to assign the entire object in one go:
+
+> assign("x", c(x, new = 3), where = 1) 
+> x
+$a:
+[1] 1
+$new: 
+[1] 3
+
+Often you want to create a local version of the object and then use assign.
+
+An unusual (but very useful) function is on.exit. This allows you to perform actions as the function exits — often some cleanup — without getting in the way of the return value. Oh build your ship of death, your little ark [16]
+
+Here is a typical example:
+
+on.exit(par(old.par))
+old.par <- par(cex = 2)
+
+You, of course, think that I must have these commands in reverse order. But we do want the on.exit command first, and it’s not going to break — I’ll get to that. The purpose of these two lines is to set a graphics parameter to a certain value, and then make sure that the parameter is returned to its previous value when the function quits. In this case, we could almost get by without on.exit by resetting the graphics parameter after we do all of the graphics, and then return whatever it is that we want (in other cases there is no way to do the necessary cleanup and get the proper return value). However, without on.exit the graphics parameter will be permanently changed if an error (or interrupt) occurs between the time that the parameter is changed and it is changed back. on.exit makes sure that the action is performed whether the function exits normally or exits due to an error.
+
+Let’s analyze what happens with our on.exit example. If the function exits normally, then the parameter is changed, changed back, and the function returns its value (and performs its side effects). If an error occurs after the call to par, then the on.exit expression is used to change it back. If an error occurs during the call to par, then old.par doesn’t exist so the on.exit expression will fail (you’ll get an “Error during wrapup” message), but no matter since the graphics parameter wasn’t changed anyway. If we had the on.exit call second, then it would be possible (though highly unlikely) that the parameter get permanently changed.
+
+The interlude function listed on page 220 creates functions that use on.exit. Fancier use of on.exit includes adding to the actions to be performed, and deleting all of the on.exit statements.
+
+A common function to be used in on.exit is unlink. This removes a file—typically a file that was created within the function calling unlink. A characteristic use is:
+
+the.filename <- tempfile("Spfun")
+on.exit(unlink(the.filename))
+# the file is created by some command
+
+inherits in its most common use returns a number (that can be interpreted as a logical) indicating if a certain string is one of the elements of the object’s class. It might be used like:
+
+if(inherits(x, "factor")) ...
+
+More involved use is also possible.
+
+Use the idiom deparse(substitute(x)) to create a character string of the name that was used for x in the call to a function. Labeling plots is a common example. The sccs function on page 49 uses this. A trivial example is:
+
+> fjjcopy
+function(x)
+list(name = deparse(substitute(x)), sum = sum(x))
+> fjjcopy(freeny.x)
+$name:
+[1] "freeny.x"
+$sum:
+[1] 1282.411
+> fjjcopy(1:8)
+$name:
+[1] "1:8"
+$sum: 
+[1] 36
+
+We will learn more about substitute later (page 324), but at this point you can just think of this as the magic potion that performs this operation.
+
+Many objects have a component or an attribute named call which is an image of the command that created the object. This is very useful for telling you what the object represents. The call component or attribute is generally created with the match.call function.
+
+> fjjcopy
+function(x)
+list(name = deparse(substitute(x)), sum = sum(x), call = match.call())
+> fjjcopy(freeny.x)
+$name:
+[1] "freeny.x"
+$sum:
+[1] 1282.411
+$call:
+fjjcopy(x = freeny.x)
+
+Let me lobby you to use this convention in your functions. Note that the result of match.call is not a character string, but rather a language object. And I plucked a hollow reed [17]
+
+Sometimes you have a list of the arguments to give to a function, or that is the easiest thing to get. In such a case, use do.call:
+
+> jj <- as.list(sample(10, 3))
+> do.call("paste", c(jj, sep = ", "))
+[1] "1, 10, 7"
+
+The genopt function on page 331 shows do.call in a more realistic setting, as does c.mathgraph on page 308.
+
+If you know how to perform an operation but there doesn’t seem to be a way to directly do the command with what you have, then there is always the eval-parse-text idiom. A dumb example is
+
+ans <- eval(parse(text = paste("fjjmain.", method,"(x)", sep = ""))) 
+
+The fjjcheckratop function on page 254 and bind.array on page 289 provide
+further examples.
+
+The synchronize function is used to ensure that hash tables associated with a database are up-to-date. This is only a concern if more than one S session is using the same database and at least one of them is writing to it. There are two hash tables involved.
+
+The first is the hash table of names of objects within the database. As assignments are made in an S session, this hash table is revised, but the session doesn’t know about changes that are made behind its back. Below we have two S sessions running and both using the same working database. Session 1 creates a new object:
+
+S1> jjnew <- 1:10
+S1> jjnew
+[1] 1 2 3 4 5 6 7 8 9 10
+
+Session 2 doesn’t see the new object until after the call to synchronize:
+
+S2> jjnew
+Error: Object "jjnew" not found
+S2> synchronize(1)
+NULL
+S2> jjnew
+ [1]  1  2  3  4  5  6  7  8  9 10
+
+The other hash table that can get out of date is the hash table of objects (rather than object names) that is controlled by the keep option. Generally only functions are put into this hash table (but see page 47). In this example both sessions start with jj being 1 through 10.
+
+S1> jj
+[1]  1  2  3  4  5  6  7  8  9 10
+S1> jj[5] <- 55555
+S1> jj
+[1] 1 2 3 455555 6 7 8 [9] 9 10
+S2> jj
+[1] 1 2 3 455555 6 7 8 [9] 9 10
+
+The second session sees the change in jj, there is no need for synchronize. But it is different if both sessions have used function fjj and the first session changes the definition:
+
+S1> fjj
+function(x)
+1/x
+S1> fjj <- function(x) 2/x^2
+S1> fjj
+function(x)
+2/x^2
+
+Because session 2 has fjj in its object hash table, it doesn’t see the revised version that is in the database until it calls synchronize:
+
+S2> fjj
+function(x)
+1/x
+S2> synchronize(1)
+NULL
+S2> fjj
+function(x)
+2/x^2
+
+synchronize can also be used without an argument. Suppose that you have a for loop that takes a long time to perform each iteration like:
+
+for(i in seq(along = lcf.ans) {
+    lcf.ans[[i]] <- long.complicated.function(x[i], y[[i]])
+}
+
+As this stands, lcf.ans (which we are assuming resides in the working database) will not be changed (written to disk) until the entire loop is finished. You may be concerned that the machine will crash before the end of the loop, or you may want to have the results as they get computed. You can force lcf.ans to be updated at each iteration with:
+
+for(i in seq(along = lcf.ans) {
+     lcf.ans[[i]] <- long.complicated.function(x[i], y[[i]])
+     synchronize()
+}
+
+In this case, it would have been better to use assign with immediate = T, but if lots of things change in the loop, synchronize becomes an easier solution. For more on this topic, see the chapter on large computations starting on page 355.
+
+The readline function captures a line of text. This is generally used in functions that interact with the user. Here is an example:
+
+fjjartshow <- function() {
+    cat("type ’y’ to get picture ’n’ to quit\n")
+    repeat {
+        cat("Do picture? ")
+        ans <- substring(readline(), 1, 1)
+        switch(ans,
+               y = , 
+               Y = {
+                    plot(1, type = "n",
+                        xlim = c(0, 10), ylim = c(0, 10),
+                        axes = F, 
+                        ylab = "", xlab = "")
+                    polygon(sample(10, 50, replace = T), 
+                        sample(10, 50, replace = T))
+                    }
+                    ,
+                n = , 
+                N = , 
+                q = ,
+                Q = break,
+                cat("Say what?"))
+    } 
+}
+
+CODE NOTE. In the instructions for using the function there appear to be only two valid responses, yet the function actually allows more. That is, there are some undocumented features. Undocumented features are fine as long as you are not going to want to change them. There should be a balance between the users’ current convenience and the programmer’s future options.
+
+If the text that is to be read is S language, then it is better to use parse to capture the text than to use readline. But in the case of fjjartshow the input is neither S language nor arbitrary text, but merely a simple choice. The menu function is the proper tool for this case. Here is a revised artshow:
+
+fjjartshow2 <- function(corners = 50, sieve = 10) {
+    repeat {
+        switch(menu(c("(another) plot",
+                      "help on polygon"),
+                      title =
+                      "type 0 to exit") + 1,
+               break, 
+               {
+                    plot(1, type = "n", axes = F, 
+                         xlim = c(0, sieve), ylim = c(0, sieve),
+                         ylab = "", xlab = "")
+                    polygon(sample(sieve, corners, replace = T),
+                            sample(sieve, corners, replace = T))
+                }
+                ,
+                help("polygon"))
+    }
+    invisible()
+}
+
+menu takes a character vector of choices and optionally a title to be printed above each menu. The user will be shown a numbered menu of the choices and prompted to select one. It is conventional to have 0 mean “exit” which is what this function does. Here is a session where just one plot is created, and the help file is not chosen at all:
+
+> fjjartshow2()
+type 0 to exit
+1: (another) plot
+2: help on polygon
+Selection: 1
+type 0 to exit
+1: (another) plot
+2: help on polygon
+Selection: 0
+>
+
+Periodically you want the return value of a function not to be printed automatically. The invisible function does this. Graphics functions, for example, often return something invisibly. Note, though, that invisibility is a trickier concept than you might think — see how the soptions function on page 45 does it, and see page 219 for an explanation of why that works.
+
+4.7 Numerics
+
+There are several functions for matrix decompositions. qr performs a QR decomposition; this is the decomposition on which the least squares regressions are based. Singular value decompositions are done with svd, and eigen does eigen decompositions. Choleski decompositions are computed with either chol or choleski. chol merely returns the triangular matrix, while choleski returns a list that includes the condition number and the pivoting (reordering for numerical accuracy).
+
+Many (but not all) of the functions described in the rest of this section are S-PLUS functions.
+
+You can numerically integrate an S function with integrate. Infinite limits are allowed. (The line.integral function on page 320 is an alternative with advantages and disadvantages.)
+
+DANGER. The function that you give to integrate must be vectorized. If it isn’t, you can get wrong answers.
+
+> integrate(function(x) min(x, 2), 1, 4)$integral
+[1] 0.5736171
+Warning messages:
+  subdivision limit reached in: integrate.f(f, lower,
+        upper, subdivisions, rel.tol,  ....
+> integrate(function(x) pmin(x, 2), 1, 4)$integral
+[1] 5.499997
+
+Don’t count on there being a warning message when you get it wrong.
+
+DANGER. The integrate function doesn’t follow the capitalization conven- tion on its arguments that is discussed on page 27 so it is possible that the extra arguments to your function can collide with arguments of integrate. Here is an example where we are integrating with respect to x, and s is an additional argument to the function.
+
+> integrate(function(x, s) x*s, 1, 3, s = 20)
+Error in qf15(f, lower, upper, aux = ..: singularity
+encountered
+Dumped
+> traceback()
+Message: singularity encountered
+5: stop("singularity encountered")
+4: qf15(f, lower, upper, aux = optargs(list(...), f, 1))
+3: integrate.f(f, lower, upper, subdivisions, rel.tol,
+2: integrate(function(x, s)
+1:
+
+The call fails, and the traceback doesn’t enlighten us at all. What is happening is that the s that we pass in is being used as the value of the subdivisions argument to integrate.
+
+Symbolic derivatives of some simple functions are given by deriv or D. D has the more human face:
+
+> D(expression(sin(x)/x), "x")
+cos(x)/x - sin(x)/x^2
+> D(expression(sin(x) * y/x), "x")
+(cos(x) * y)/x - (sin(x) * y)/x^2
+
+But you can get an actual function from deriv:
+
+> deriv(expression(sin(x) * y/x), "x", function(x, y) NULL)
+function(x, y) {
+    .expr2 <- (sin(x)) * y
+    .value <- .expr2/x
+    .grad <- array(0, c(length(.value), 1), list(NULL, "x"))
+    .grad[, "x"] <- (((cos(x)) * y)/x) - (.expr2/(x^2))
+    attr(.value, "gradient") <- .grad
+    .value
+}
+
+This returns a vector of the expression which has a gradient attribute containing the derivative.
+
+The approx function performs linear interpolation given two vectors.
+
+More commonly useful is the interp function that performs interpolation to a regular two-dimensional grid given three vectors. In particular, this is often used to create output that is suitable as input to the graphics functions persp, contour and image.
+
+Use polyroot to find the roots of a polynomial. The coefficients may be complex as well as numeric, and the degree can be as high as 48.
+
+To find some root of a non-polynomial univariate function, use uniroot. optimize finds a local minimum of a univariate function.
+
+Both nlminb and nlmin minimize general nonlinear functions. They each have their little quirks, but the only essential difference between them is that nlminb allows box constraints to be put on the parameters while nlmin does not. They are both based on PORT routines. The portoptgen function (see starting at page 344) provides an alternative.
+
+The ms function provides optimization from a different perspective. It takes a formula and a data frame. The formula is applied to each row of the data frame, and the result is summed across rows. It seeks a minimum of that sum.
+
+The fft function performs a fast Fourier transform. In addition to the statistical operation of spectral analysis, this can be used for convolutions. fft accepts arrays as well as vectors, so it performs higher dimensional transforms.
+
+Other numerical functionality is performed by vecnorm, kronecker, peaks, chull (for two-dimensional convex hulls), spline, ivp.ab (for differential equa- tions), napsack and stepfun.
+
+The primes function may be found in the progexam library to S-PLUS. This finds prime numbers. The S-PLUS Programmer’s Manual shows a factors function, but it doesn’t appear in the library.
+
+4.8 Randomness
+
+Pseudo-random functions within S use a single random number generator. The seed for the generator is stored in .Random.seed, which is a vector of 12 small integers. As far as I know, this is robust, but it is not a wise idea to assign anything to .Random.seed that was not previously a random seed.
+
+If you want to reproduce results of random functions, then you need to save the seed and restore it just before the call that is to reproduce the results:
+
+> jjsave.seed1 <- .Random.seed
+> runif(4)
+[1] 0.5701077 0.5981965 0.2946985 0.4174643
+> runif(4)
+[1] 0.93036326 0.93932162 0.08411177 0.94985548
+> .Random.seed <- jjsave.seed1
+> runif(4)
+[1] 0.5701077 0.5981965 0.2946985 0.4174643
+
+DANGER. Do not assign .Random.seed within a function, or anywhere else that is not a database on the search list.
+
+fjjran1 <- function(n = 3) {
+    # DO NOT DO THIS
+    .Random.seed <- .Random.seed
+    for(i in 1:n) {
+        print(runif(3))
+    }
+    invisible()
+}
+> fjjran1()
+[1] 0.5157684 0.5730458 0.7764676
+[1] 0.5157684 0.5730458 0.7764676
+[1] 0.5157684 0.5730458 0.7764676
+> fjjran1()
+[1] 0.9350564 0.7920594 0.6019266
+[1] 0.9350564 0.7920594 0.6019266
+[1] 0.9350564 0.7920594 0.6019266
+
+Here’s the explanation for what is happening. The random functions look for the first value of .Random.seed that they see, which in this case is the value set in fjjran1. When a random function is done, it updates .Random.seed on the working database. So while we stay inside fjjran1 we only see one version of .Random.seed even though new versions are being written to the working database. When the second call to fjjran1 starts, it sees the value of .Random.seed that was updated on the last loop of the previous call to fjjran1.
+
+Another way of ensuring reproducibility is to use set.seed. This takes an integer that should be between 1 and 1024, and sets the random seed to a certain value based on the integer given.
+
+> set.seed(1023); print(.Random.seed)
+[1] 21 14 49 16 62 1 32 22 36 23 28 3 
+> set.seed(-1); print(.Random.seed)
+[1] 21 14 49 16 62 1 32 22 36 23 28 3
+
+The example above shows that set.seed returns the same answer for arguments that are the same modulo 1024.
+
+When a function that uses randomness is stopped on an error or interrupted, the random seed will not be updated. The technical reason for this is that assignments are not committed until the execution of the function is finished. This is the proper behavior — you wouldn’t want the seed to be changed when an error occurs. If the seed did change, then you couldn’t be sure that your fix to the function eliminated the bug — it could be that the new set of random numbers doesn’t exhibit the bug.
+
+S contains functions for a number of probability distributions. Usually there are four functions for each distribution. The function names begin with one of the four letters ‘r’, ‘d’, ‘p’, ‘q’, and end with a code for the distribution. Examples are runif, dunif, punif, qunif, and rnorm, dnorm, pnorm, qnorm. The ‘r’ stands for random, ‘d’ is for density, ‘p’ is for probability, and ‘q’ is for quantile. The random functions generate numbers from the distribution, the probability functions give the probability of being less than or equal to the value given (probability distribution function), and the quantile functions return the value where the distribution function achieves the probability given. These functions are vectorized.
+
+DANGER. You need to be careful when you get to the boundary of parameter spaces.
+
+> jjsd <- c(1.4, 0, 3.4)
+> rnorm(3, mean = 1, sd = jjsd) # bad news
+[1] 0.7728073        NA 0.5524101
+Warning messages:
+  One or more nonpositive parameters in: rnorm(3, mean
+        = 1, sd = jjsd)
+> rnorm(3, mean = 1) * jjsd # wrong
+[1] 2.000239 0.000000 6.574893
+> rnorm(3) * jjsd + 1 # right
+[1] -0.02761199  1.00000000  3.91233952
+
+DANGER. Discrete distributions can be tricky, rounding is often a good idea.
+
+> jj2 <- c(2, 2 - .Machine$double.eps)
+> jj2
+[1] 2 2
+> ppois(jj2, 1.5)
+[1] 0.8088468 0.5578254
+> ppois(round(jj2), 1.5)
+[1] 0.8088468 0.8088468
+
+The sample function is a random function of a different sort. In its simplest use, it returns a permutation of its argument. (A single integer stands for the integers up to it from 1.)
+
+> names(jjwt)
+[1] "dorothy"  "harold"   "munchkin" "stevie"
+> sample(names(jjwt))
+[1] "harold"   "munchkin" "dorothy"  "stevie"
+> sample(10)
+[1]  7  2  5 10  3  9  1  6  8  4
+
+An important argument is replace which tells whether or not items are to be replaced after they have been selected. (I remember that the default value of replace is FALSE since a permutation results when replace is missing.)
+
+> sample(names(jjwt), 10, rep = T)
+ [1] "harold"   "stevie"   "harold"   "harold"
+ [5] "dorothy"  "stevie"   "dorothy"  "munchkin"
+ [9] "munchkin" "munchkin"
+
+There is also a probability argument that takes the relative probabilities for each item in the population. This need not sum to 1, sample will normalize it.
+
+> sample(names(jjwt), 10, rep = T, prob = 1:4)
+ [1] "stevie"   "stevie" "stevie"   "dorothy"
+ [5] "munchkin" "stevie" "munchkin" "munchkin"
+ [9] "munchkin" "stevie"
+
+4.9 Graphics
+
+Here is another part of my cursory look at graphics in S.
+
+The trellis package is a relatively recent addition to the graphical capabilities in S. Primarily trellis is concerned with ways to plot data of several variables in a comprehensible manner.
+
+plot is the most conspicuous graphics function. It is generic and there are numerous methods for it. The default method does what I expect you would think, plus a little more.
+
+Plots of three variables are done with persp, contour and the S-PLUS function image. The trellis function wireframe is similar to persp.
+
+General purpose graphics functions include barplot, dotchart, matplot, symbols and pie. Pie charts are out of favor with statistical graphics experts — they essentially require us to estimate angles, which humans are not very good at doing. Use dot charts or bar plots instead.
+
+Some functions of a more statistical nature are boxplot, hist, pairs, qqnorm, qqplot, tsplot, and the S-PLUS function biplot.
+
+Among the most useful low-level graphics functions are title, text, mtext, legend, points, lines, abline, arrows, segments, polygon, axis, rug, box and frame.
+
+Two functions that are available on many graphics devices for interacting with plots are identify and locator. identify writes something on the plot about the nearest datapoint to the place that you specify. locator will give the coordinates to locations that you select.
+
+4.10 Statistics
+
+Functions to do simple summary statistics are mean, median, var, cor, quantile. The S-PLUS functions location.m, cov.mve, scale.tau and scale.a perform robust estimation. S-PLUS also contains cov.wt for covariance estimation with observation weights.
+
+Functions in S-PLUS that perform hypothesis tests are t.test, wilcox.test, cor.test, var.test, prop.test, chisq.test, fisher.test, kruskal.test, mantelhaen.test, mcnemar.test, and friedman.test. Goodness of fit tests are performed with chisq.gof and ks.gof. crosstabs is also an S-PLUS function.
+
+There are two ways to perform ordinary least squares regression — either via lm which takes a formula, or with lsfit which is an older function. If you want to use a function that is quick at performing regressions on data that is known to be good (no missing values and so on), then lm.fit.qr would be a good choice. A situation that I have in mind is if the function you are writing does iterative regressions. If you want to fit a least squares model with the coefficients constrained to be positive, then use the nnls.fit function of S-PLUS.
+
+Robust regression may be done via l1fit which performs least absolute deviation regression, or with rreg which does M-estimates of regression. High-breakdown regression is done with the ltsreg (least trimmed squares regression) S-PLUS function.
+
+Analysis of variance (ANOVA) is accomplished with aov. (There is an anova function — which does mean analysis of variance — but this is not the function you want to use to fit an ANOVA model.) Variance components can be estimated with the S-PLUS function varcomp. The lme and nlme functions (linear mixed effects and nonlinear mixed effects) provide related functionality in recent versions of S-PLUS. S-PLUS also has functions for making quality control charts.
+
+Yet another area where S-PLUS has added a lot of functionality is in time series. Univariate ARIMA models are fit with arima.mle and its friends. The arima.fracdiff function fits (long-memory) fractionally differenced ARIMA models. ar fits univariate and multivariate AR models, and spectrum performs spectral analysis on univariate and multivariate series. In addition, multivariate autocorrelation estimates (including cross-correlations) are available via acf and univariate robust seasonal decompositions are created with stl (vanilla S function).
+
+Functions for multivariate analysis include cmdscale for classical multidimensional scaling, and cancor for canonical correlation. Multivariate analysis within S-PLUS also includes principal components with princomp, factor anal- ysis with factanal and multivariate analysis of variance with manova.
+
+Survival analysis functions are available in S-PLUS and from statlib.
+
+The glm function fits generalized linear models. Notice that one of the functions to fit regression was lm as in “linear model”. One description of regression is that the expected value of the response is some linear combination of the explanatory variables; furthermore, the errors from this are distributed as a Gaussian, or at least continuously distributed and symmetric about zero. Generalized linear models are generalized in two ways. First, that the expected response is some specified function of a linear combination of the explanatory variables; that function is called the link function. Second that the errors can come from a variety of distributions, such as binomial, Poisson or gamma. Logistic regression fits within the scheme of generalized linear models.
+
+Smoothing is an important element of modern statistics. Explicit functions for smoothing include smooth, loess.smooth, smooth.spline and the S-PLUS functions ksmooth and supsmu.
+
+Much of the rest of the statistical functionality that I’ll talk about are some combination of the idea of generalized linear models and smoothing.
+
+Directly along this line are generalized additive models which are fit with gam. A generalized additive model is just like a generalized linear model except that we find a linear combination of smooth functions of each explanatory variable, rather than a linear combination of the variables themselves. Each smooth function is a function of one variable only.
+
+The ace and avas S-PLUS functions fit models that are similar to generalized additive models, except that they do not have a link function, but they allow the response to be transformed via a smooth as well as the explanatory variables.
+
+The S-PLUS function ppreg fits projection pursuit regression models. These take a linear combination of the explanatory variables first and then does a smooth. Several of these terms may be added together to approximate the response.
+
+loess does local (robust) regressions so that the response is approximated locally in each region of the space of the explanatory variables.
+
+The nls function performs nonlinear least squares. This is different from ordinary regression only because the parameters do not enter linearly in the model. For example a linear equation would be
+
+y = ax1 + bx2 + c (4.1) 
+
+where the parameters are a, b and c. Here is a nonlinear equation
+
+z = exp(ax1)*exp(bx2)*exp(c) (4.2) 
+
+that can be transformed to a linear form by taking logarithms. The following
+formula is inherently nonlinear:
+
+y = ax^b + c (4.3) 
+
+Nonlinear regression with box constraints on the parameters may be done in
+S-PLUS with nlregb.
+
+Finally, we get far afield with tree which fits classification and regression trees. A tree is a regression tree if the response takes on continuous values, and it is a classification tree if the response is categorical. Trees are decidedly non-smooth. The basic operation in growing a tree is splitting a node. The object is to have the response within each of the two groups as alike as possible. At first there is only one node — the whole dataset. You split that in two, which means to find the best combination of the explanatory variable and the location in the explanatory variable to break the data into two. Then split each of the two nodes you just created. Continue splitting nodes until you don’t want to anymore. (The most common current practice is to create more than enough nodes, and then to decide which splits to throw away — inefficient computationally, but more efficient statistically.)
+
+Trees have become popular because in some respects they are very easy. When you have your tree and you want to know how to classify a new case, you only need to consider one variable at a time: Number of feet greater than 3? Yes. Weight less than 10 kg? No. Then must be a corgi.
+
+4.11 Under-Documented
+
+This section presents functions that don’t have help files, or didn’t have help for some portion of their life, or for other reasons are less visible than I think they should be.
+
+zapsmall is a little-known and deviously clever little function. It changes numbers that are very close to zero relative to the largest number (in absolute value) in the vector. It was created to be used for statistics that are printed out, but it can also be used for informal testing as in:
+
+zapsmall(real.answer - fjj(input))
+
+Here we think that the result of fjj(input) should be the same as real.answer with perhaps some noise thrown in. If you see numbers that are on the order of rounding error, then you know that there are no numbers much bigger than that. On the other hand, you might see a bunch of zeros and a few non-zero numbers.
+
+S-PLUS contains a group of functions that do set operations on atomic vectors. Their names are union, intersect, and setdiff.
+
+Another secretive S-PLUS function is find.objects which is like find except that it finds object names that contain a certain string rather than matching the string exactly. The other difference is that find.objects only takes a string—you may not pass the unquoted name to it. Using find.objects is like using objects with the pattern argument except that find.objects looks in all of the databases on the search list, not just one.
+
+The slice.index S-PLUS function is a relatively recent addition. It is a generalization of the row and col functions to higher dimensional arrays.
+
+The merge.levels function allows you to combine levels in a factor. For example, if you had a factor representing species, you could use merge.levels to make a new factor representing genera or families.
+
+If you are poor and use S-PLUS via modem without a windowing system, then you will not have the help window system available to you. The topic function searches for phrases within the titles of help files, so that you may be able to find some functionality even if you don’t know the function name.
+
+> topic("mark")
+invisible       Mark Function as Non-Printing
+Question.mark   On-line Information on Functions, Objects, ...
+util    Earnings and Market/Book Ratio for Utilities
+util.earn       Earnings and Market/Book Ratio for Utilities
+util.mktbook    Earnings and Market/Book Ratio for Utilities
+
+An S-PLUS function that can come in handy for messing with character data is AsciiToInt. This doesn’t seem to be intended for public use, but it probably won’t go away soon. For each character in a character vector, AsciiToInt returns the corresponding ASCII code. The result that AsciiToInt returns is one numeric vector.
+
+> match(AsciiToInt("/tmp/myomy/Sfun.45"), AsciiToInt("/"), nomatch = 0)
+[1] 1 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 0 0
+ 
+4.12 Deprecated
+
+The category function and its relatives do the same thing that factor, ordered and their relatives do. category was written before object-orientation came along. It holds no benefit and some deficits relative to the object-oriented versions, though factors are no angels as can be seen starting from page 130. And your exasperating pit-pat [18]
+
+sort.list does the same thing as, but a little less than order, and the name can be a source of confusion. Use order instead.
+
+4.13 Things to Do
+
+Create a vectorized function that divides each string in a vector into its individual characters.
+
+The S-PLUS functions union and intersect use atomic vectors to represent sets. Set theory implies that lists are the proper objects for sets. Create a suite of functions that perform set operations on lists. Include a symmetric difference. Can you make them reasonably efficient? Is object-orientation useful? Is a complement function feasible?
+
+Make zapsmall work for complex numbers. What do you want it to do?
+
+Figure out why the following happens:
+
+> jjm
+     [,1] [,2] [,3]
+[1,]    1    6   11
+[2,]    2    7   12
+[3,]    3    8   13
+[4,]    4    9   14
+[5,]    5   10   15
+> apply(jjm, 1, "+")
+     [,1] [,2] [,3] [,4] [,5]
+[1,]    1    2    3    4    5
+[2,]    6    7    8    9   10
+[3,]   11   12   13   14   15
+
+Learn the format that data.dump produces. Hack at it until you understand it. 
+
+Create a function that will read in double-precision numbers that are written
+in scientific notation with a “d” instead of an “e”.
+
+Make it so that the statement
+
+paste("data", i, sep = "") <- 1:i # THIS WON’T WORK 
+
+will work. Is this a good thing to do?
+
+Learn what each function in your version of S does.
+
+4.14 Further Reading
+
+For more on statistical functionality in S and S-PLUS, see Venables and Ripley (1997) Modern Applied Statistics with S-Plus, which comes with high praise. Spector (1994) An Introduction to S and S-Plus also surveys the statistical capabilities of S-PLUS. Chambers and Hastie (1992) Statistical Models in S describes the modeling functions that were produced at Bell Labs.
+
+Books that describe some of the more esoteric statistical methods include McCullagh and Nelder (1989) Generalized Linear Models; Hastie and Tibshirani (1990) Generalized Additive Models; Bates and Watts (1988) Nonlinear Regression Analysis and Its Applications; Seber and Wild (1989) Nonlinear Regression; Breiman, Friedman, Olshen and Stone (1984) Classification and Regression Trees; Ripley (1996) Pattern Recognition and Neural Networks; Beran (1994) Statistics for Long-Memory Processes.
+
+Many of the graphical ideas embodied in the trellis package are discussed in Cleveland (1993) Visualizing Data.
+
+Reading help files and snooping through directories for undocumented objects are the best ways to increase your vocabulary. Of course for the undocumented (and under-documented) functions, you will need to use the ultimate documentation — the code itself.
+
+Further functionality may be found in the S section of statlib. I’ll not survey its contents because some uncooperative person would go and add something good after I made the list. Additions to the section are often announced on S-news.
+
+4.15 Quotations
+
+[13] Robinson Jeffers “Shine, Perishing Republic”
+[14] Ezra Pound “In a Station of the Metro”
+[15] Emily Dickinson 258 (There’s a certain Slant of light) 
+[16] D. H. Lawrence “The Ship of Death”
+[17] William Blake “Piping Down the Valleys Wild”
+[18] Stevie Smith “No Categories!”

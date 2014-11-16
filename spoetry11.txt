@@ -1,0 +1,328 @@
+S POETRY
+by Patrick J. Burns
+
+Chapter 11: Character
+
+11.1 Perl
+11.2 Home Brew
+11.3 Things to Do
+11.4 Further Reading
+11.5 Quotations
+
+
+Here the focus is character data. No belly and no bowels, Only consonants and vowels. 36
+11.1 Perl
+This is a function that provides a simple interface to Perl. It assumes that the same action will be performed on each element of the input x.
+"perl"<-
+function(x, cmd, preface = "", print = T, trace = F)
+{
+        ploc <- tempfile("sperl")
+        on.exit(unlink(ploc))
+        perl.pre <- c("#!/usr/bin/perl", preface,
+                "while(<>) {")
+        if(print)
+                perl.post <- c(";\tprint $_ ;", "}")
+        else perl.post <- c(";", "}")
+        cat(file = ploc, c(perl.pre, cmd, perl.post),
+                sep = "\n")
+        if(trace) {
+                foo <- unix(paste("cat", ploc), out =
+F)
+        }
+        ans <- unix(paste("perl", ploc), x)
+        if(length(ans) == length(x))
+ans }
+attributes(ans) <- attributes(x)
+275
+276 CHAPTER 11. CHARACTER
+There are other ways to use Perl of course, but this is probably the most natural for S. This function starts by creating a file that contains a Perl script. If trace is TRUE, then the script is printed—this is useful for debugging purposes. Finally the script is run, and the answer is given the attributes of the input if the lengths match.
+The transcribe function uses perl.
+"transcribe"<-
+function(x, old, new = "", complement = F, delete = F,
+{
+}
+squash = F, sep = "/")
+flags <- paste(c("c", "d", "s")[c(complement,
+        delete, squash)], collapse = "")
+if(complement)
+        old <- paste(old, "\\n", sep = "")
+ptext <- paste("tr", sep, old, sep, new, sep,
+        flags, " ;", sep = "")
+if(length(ptext) != 1)
+        stop("old and new must each be single strings")
+perl(x, ptext)
+In good textbook fashion, I have presented this in reverse order. In reality, a version of transcribe came first—that was the task at hand—then the Perl part of the function was abstracted out and transcribe rewritten.
+Switching between upper and lower case is one use for transcribe.
+> jjsn <- state.name[21:32]
+> jjsn
+ [1] "Massachusetts" "Michigan"
+"Minnesota"
+"Montana"
+"New Hampshire"
+"New York"
+"minnesota"
+"montana"
+"new hampshire"
+"new york"
+"MINNESOTA"
+"MONTANA"
+"NEW HAMPSHIRE"
+"NEW YORK"
+[4] "Mississippi"
+"Missouri"
+"Nevada"
+"New Mexico"
+ [7] "Nebraska"
+[10] "New Jersey"
+> transcribe(jjsn, "A-Z", "a-z")
+[1] "massachusetts" "michigan"
+[4] "mississippi"
+"missouri"
+"nevada"
+"new mexico"
+ [7] "nebraska"
+[10] "new jersey"
+> transcribe(jjsn, "a-z", "A-Z")
+[1] "MASSACHUSETTS" "MICHIGAN"
+ [4] "MISSISSIPPI"
+ [7] "NEBRASKA"
+[10] "NEW JERSEY"
+"MISSOURI"
+"NEVADA"
+"NEW MEXICO"
+Other amusements include:
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+11.1. PERL
+> transcribe(jjsn, "aeiou", delete=T)
+ [1] "Msschstts" "Mchgn"     "Mnnst"
+ [5] "Mssr"      "Mntn"      "Nbrsk"
+ [9] "Nw Hmpshr" "Nw Jrsy"   "Nw Mxc"
+277
+> transcribe(transcribe(jjsn, "aeiou", delete=T),
++       "a-z", "a-z", squash=T)
+[1] "Mschsts"   "Mchgn"
+[5] "Msr"       "Mntn"
+[9] "Nw Hmpshr" "Nw Jrsy"
+"Mnst"
+"Nbrsk"
+"Nw Mxc"
+"Msp"
+"Nvd"
+"Nw Yrk"
+> transcribe(jjsn, "aeiou", "_", comp=T)
+ [1] "_a__a__u_e___" "_i__i_a_"      "_i__e_o_a"
+[4] "_i__i__i__i"
+"_i__ou_i"      "_o__a_a"
+"_e_a_a"        "_e___a____i_e"
+"_e___e_i_o"    "_e___o__"
+ [7] "_e__a__a"
+[10] "_e___e__e_"
+> transcribe(jjsn, "aeiou", "_", comp=T, delete=T)
+[1] "aaue" "iia"  "ieoa" "iiii" "ioui" "oaa"  "eaa"
+[8] "eaa"  "eaie" "eee"  "eeio" "eo"
+When you’re done playing, you can use transcribe to change names valid in C to valid S names, and vice versa.
+> transcribe("state_name", "_", ".")
+[1] "state.name"
+> transcribe("state.name", ".", "_")
+[1] "state_name"
+This is its use in portoptgen of page 348.
+The substifile function uses Perl in a different fashion. Here the intent is
+not to change S objects, but to change files.
+"substifile"<-
+function(filenames, old, new, sep = "/", backup =
+{
+".jj")
+if(length(old) != 1 || length(new) != 1)
+        stop("old and new must be single strings")
+if(nchar(sep) != 1)
+        stop("sep needs to be a single character")
+if(any(AsciiToInt(sep) == AsciiToInt(c(old,
+        new))))
+        stop("sep character in old or new")
+cmd <- paste("perl -p -i", backup, " -e \"s",
+        sep, old, sep, new, sep, " ;\" ",
+        paste(filenames, collapse = " "), sep
+= "")
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+"Msssspp"
+"Nvd"
+"Nw Yrk"
+
+278
+}
+CHAPTER 11. CHARACTER
+unix(cmd, out = F)
+A vector of file names is taken as well as a string to be replaced and a string to substitute in. Some checks are made to ensure that the input is okay, then the command is pasted together, and finally the command is executed. The return value of substifile is the return value of the call to unix with output=F, which is the exit status of the command. The p flag to Perl invokes a while loop like the one that the perl function creates. The i flag means to do the changes in place; if followed by a string, then backup copies of the original files are created, adding the string as a suffix to the filenames.
+The substifile function is used later (in portoptgen, page 348) to modify template files to be specific to a particular case.
+An alternative to Perl for manipulating character strings is C. Basic func- tionality is obtained with the strings.h header file.
+11.2 Home Brew
+Although S is relatively weak on functionality for character data, quite a lot can be done with its in-built functions. Most often of use are paste, substring and nchar.
+Here is a function to justify a vector of character strings. The format func- tion does this, but you have no control over how it does it.
+"justify"<-
+function(x, type = "r")
+{
+        type <- unabbrev.value(type, c("right",
+                "center", "left"))
+        x <- as.character(x)
+        ncx <- nchar(x)
+        blanks <- paste(rep(" ", max(ncx)), collapse
+                 = "")
+        blanks <- substring(blanks, 1, max(ncx) - ncx)
+        switch(type,
+                right = paste(blanks, x, sep = ""),
+                left = paste(x, blanks, sep = ""),
+                center = {
+                        blank.half <- nchar(blanks) %/%
+                                2
+                        paste(substring(blanks, 1,
+                                blank.half), x,
+                                substring(blanks,
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+11.2. HOME BREW
+} )
+}
+The blanks variable is first created as a single string of a certain number of blank spaces, then it is replicated to the length of x via substring. All the rest of the function is quite simple. Below is an illustration of the three types of justification.
+> as.matrix(justify(dimnames(freeny.x)[[2]], "r"))
+                        [,1]
+[1,] "lag quarterly revenue"
+blank.half + 1), sep
+ = "")
+[2,] "
+[3,] "
+[4,] "
+> as.matrix(justify(dimnames(freeny.x)[[2]], "l"))
+                        [,1]
+[1,] "lag quarterly revenue"
+[2,] "price index          "
+[3,] "income level         "
+[4,] "market potential     "
+> as.matrix(justify(dimnames(freeny.x)[[2]], "c"))
+                        [,1]
+[1,] "lag quarterly revenue"
+[2,] "     price index     "
+[3,] "    income level     "
+[4,] "  market potential   "
+There is a description of “valid” S names on page 4, here is a function that determines if each element of a character vector is a valid name.
+"valid.s.name"<-
+function(x)
+{
+        xnum <- lapply(x, AsciiToInt)
+        the.table <- c(48:57, 46, 65:90, 97:122)
+        xmatch <- lapply(xnum, match, table =
+                the.table, nomatch = 0)
+        good <- unlist(lapply(xmatch, function(z)
+        all(z > 10)))
+        bad <- unlist(lapply(xmatch, function(z)
+        any(z == 0) || all(z < 11) || !length(z)))
+        ans <- rep(NA, length(x))
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+     price index"
+    income level"
+market potential"
+279
+
+280
+CHAPTER 11. CHARACTER
+}
+ans[good] <- T
+ans[bad] <- F
+ugly <- !good & !bad
+if(any(ugly)) {
+        xug <- unlist(lapply(xmatch[ugly],
+                function(z)
+        z[z != 11][1] > 11))
+        ans[ugly][xug] <- T
+        ans[ugly][!xug] <- F
+}
+names(ans) <- names(x)
+ans
+. Although this does get the answer, we are straining ourselves for such a simple request. The first thing is to use lapply to effectively vectorize AsciiToInt. All of the rest is dealing with subscripting with logicals. Notice that special attention needs to be given to the empty string—this falls under the heading of “test along seams” discussed on page 53.
+A use of this function is to make sure that a group of functions are under proper source control. Suppose that you have an object manifest that is a vector of the names of all the functions you want to have controlled. Some of these may be operators or assignment functions, and have a different name on the dump file. You can issue a command like:
+for(i in manifest[valid.s.name(manifest)]) {
+  cat("\n", i, "\n")
+  print(diffsccs(i))
+}
+Then view the names of the strange ones with:
+manifest[!valid.s.name(manifest)]
+These can be checked with diffsccs by knowing the naming convention.
+The find.I.of function does a very specific thing—take a string and find the location of calls to the I function in it. Page 301 tells why we would want to do this.
+So here’s the game: Find where the “I”s are that correspond to calls to the function, then find where the calls end.
+> find.I.of
+function(string, nesting.ok = F)
+{
+        string.code <- AsciiToInt(string)
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+11.2. HOME BREW 281
+        if(!any(eyes <- string.code == AsciiToInt("I")))
+                return(NULL)
+        open.par <- AsciiToInt("(")
+        close.par <- AsciiToInt(")")
+        opens <- string.code == open.par
+        Istart <- eyes & c(opens[-1], F)
+        if(!any(Istart))
+                return(NULL)
+        closes <- string.code == close.par
+        counts <- cumsum(opens - closes)
+        Istart.num <- seq(along = Istart)[Istart]
+        ans <- array(0, c(length(Istart.num), 2))
+        for(i in 1:length(Istart.num)) {
+                loci <- Istart.num[i]
+                this.lev <- counts[-1: - loci] ==
+                        counts[loci]
+                if(!any(this.lev))
+                        stop("no closing parenthesis for I")
+                ans[i,  ] <- c(0, min(seq(along =
+                        this.lev)[this.lev])) + loci
+        }
+        if(!nesting.ok && nrow(ans) > 1) {
+}
+ans }
+ans <- ans[c(T, diff(ans[, 2]) > 0),  ,
+        drop = F]
+The hard part is finding the end of the call. The counts variable tells how many opening parentheses haven’t yet had a closing parenthesis to match it. The for loop finds all of the calls, then later the nested calls are removed if required. Notice the drop = F to ensure that we always end up with a matrix.
+Here are some examples:
+> jjs1
+[1] "~ jj1 + 2:4 * jjI"
+> find.I.of(jjs1)
+NULL
+> jjs2
+[1] "~ jj1 * I((2*jjI)+1)"
+> find.I.of(jjs2)
+     [,1] [,2]
+[1,]    9   20
+> jjs3
+[1] "~ jj1 * 2:4"
+> find.I.of(jjs3)
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+282 CHAPTER 11.
+NULL
+> jjs4
+[1] "~ I((2)* I(jee+3)) + 2+I(3^x) + I (y^2)"
+> find.I.of(jjs4)
+     [,1] [,2]
+[1,]    3   18
+[2,]   24   29
+> find.I.of(jjs4, T)
+     [,1] [,2]
+[1,]    3   18
+[2,]   10   17
+[3,]   24   29
+CHARACTER
+Notice that the call in jjs4 that has a space between the “I” and the “(” is not found by the function. But this isn’t really much of a problem because the space won’t be there if the string is parsed and then deparsed.
+11.3 Things to Do
+Make a list of desirable functionality for character data. How best can it be achieved?
+The comparison operators like < work with character data where the ordering comes from ASCII. Create a function that will compare character vectors using an arbitrary ordering of characters. Use this to create a function that will sort according to the arbitrary ordering.
+Create a function for playing “hangman”.
+Write a function that takes a vector and returns a list where each component of the result contains the “words” in the corresponding element of the input. How general can you make it?
+Rewrite valid.s.name using the perl function. Try improving my version of the function using only “native” functionality. How should the reserved words of S be handled?
+Write a function that generalizes find.I.of, so that it can be a simple call to your function.
+11.4 Further Reading
+The two books Programming Perl by Wall, Christiansen and Schwartz, plus Learning Perl by Schwartz provide a good explanation of the Perl language.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+11.5. QUOTATIONS 283 11.5 Quotations
+36John Crowe Ransom “Survey of Literature”

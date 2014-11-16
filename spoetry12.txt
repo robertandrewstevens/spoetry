@@ -1,0 +1,220 @@
+S POETRY
+by Patrick J. Burns
+
+Chapter 12: Arrays
+
+12.1 Matrices
+12.2 Array Functions
+12.3 Things to Do
+12.4 Further Reading
+
+
+The focus is on arrays that have more than two dimensions, but we start with matrices. See also the section in the chapter on C about dealing with arrays in C code—it starts on page 173.
+12.1 Matrices
+The square root of a symmetric matrix A is defined as any matrix R such that
+A = R′R (12.1)
+where the prime denotes the transpose. The Choleski decomposition provides one square root. This is the particular square root that is upper triangular.
+> jjfv <- var(freeny.x)
+> jjfvc <- chol(jjfv)
+> > max(abs(t(jjfvc) %*% jjfvc - jjfv))
+[1] 1.387779e-17
+Sometimes it is desirable to have the symmetric square root. Here is a function that returns it, or its inverse.
+"symsqrt"<-
+function(x, inverse = F, tol = 1e-10)
+{
+        dx <- dim(x)
+        if(dx[1] != dx[2])
+                stop("need square matrix")
+        if(any(abs(x - t(x)) > tol * max(abs(x))))
+                stop("need symmetric matrix")
+        xeig <- eigen(x, sym = T)
+285
+286
+}
+CHAPTER 12. ARRAYS
+if(inverse)
+        xeig$vectors %*% (xeig$values^-0.5 * t(
+                xeig$vectors))
+else xeig$vectors %*% (xeig$values^0.5 * t(
+                xeig$vectors))
+This performs an eigen decomposition of the matrix, takes the square root (or inverse square root) of each eigenvalue, and then puts the matrix back together again. In effect it uses a sparse matrix technique for the diagonal matrix of eigenvalues.
+Now test it to see that it does return a square root, and that the result is symmetric.
+> jjfvs <- symsqrt(jjfv)
+> max(abs(jjfvs %*% jjfvs - jjfv))
+[1] 1.526557e-16
+> max(abs(jjfvs - t(jjfvs)))
+[1] 0
+There are, in fact, a whole group of square roots. The following function returns a random square root.
+"rmatsqrt"<-
+function(x)
+{
+        xc <- chol(x)
+        x[] <- runif(dim(x)[1]^2)
+        orthmat <- svd(x)$v
+        orthmat %*% xc
+}
+This finds one square root with chol, then creates an orthogonal matrix out of a matrix of random numbers. These two are then multiplied to produce the random square root.
+Below two different square roots are produced, shown to be different, and then checked to see that they really are square roots of the matrix in question.
+> jjsv1 <- rmatsqrt(var(freeny.x))
+> jjsv2 <- rmatsqrt(var(freeny.x))
+> jjsv1
+[1,]
+[2,]
+[3,]
+lag quarterly revenue price index income level
+          -0.21783334  0.09945160  -0.07706364
+          -0.10834290  0.03956840  -0.02901060
+          -0.19116893  0.06958443  -0.08713387
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+12.2.
+[4,]
+[1,]
+[2,]
+[3,]
+[4,]
+> jjsv2
+[1,]
+[2,]
+[3,]
+[4,]
+lag quarterly revenue price index income level
+           -0.1831166  0.08579325  -0.06217413
+           -0.1119885  0.04130825  -0.06180107
+           -0.1560023  0.05075554  -0.06170711
+           -0.1706170  0.07836504  -0.05489805
+ARRAY FUNCTIONS 287
+          -0.06152129  0.03854587  -0.01156840
+market potential
+-0.047556536
+-0.021705228
+-0.036462742
+-0.009923954
+market potential
+     -0.03474957
+     -0.02301239
+     -0.03051149
+     -0.03863553
+[1,]
+[2,]
+[3,]
+[4,]
+> all.equal(t(jjsv1) %*% jjsv1, var(freeny.x))
+[1] T
+> all.equal(t(jjsv2) %*% jjsv2, var(freeny.x))
+[1] T
+12.2 Array Functions
+This section contains functions that make it easier to use higher-dimensional arrays.
+Stable Apply
+When the function used in apply returns a vector, then those vectors fill along the first dimension of the result. For example, sorting the rows of a matrix will give you the transpose of what one would naively expect.
+> jjmr <- matrix(sample(15), 3)
+> jjmr
+[,1] [,2] [,3] [,4] [,5] [1,] 14 3 1210 [2,] 12 13 9415 [3,] 7 11 8 5 6 > apply(jjmr, 1, sort)
+     [,1] [,2] [,3]
+[1,]    1    4    5
+[2,]    2    9    6
+[3,]    3   12    7
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+288 CHAPTER 12. ARRAYS [4,] 10 13 8
+[5,] 14 15 11
+The stable.apply function keeps the dimensions of the output in the same
+order as the input.
+> stable.apply(jjmr, 1, sort)
+     [,1] [,2] [,3] [,4] [,5]
+[1,] 1 2 3 10 14
+[2,]    4    9   12   13   15
+[3,] 5 6 7 8 11
+Here is the definition of stable.apply.
+"stable.apply"<-
+function(X, MARGIN, FUN, ...)
+{
+}
+ldx <- length(dim(X))
+if(length(MARGIN) != ldx - 1) {
+        warning("stability not performed")
+        return(apply(X, MARGIN, FUN, ...))
+}
+ans <- apply(X, MARGIN, FUN, ...)
+if(length(dim(ans)) != ldx)
+        ans
+else aperm(ans, order(c((1:ldx)[ - MARGIN], MARGIN)))
+You can see from this that I’ve overstated the case somewhat—the dimensions are left intact only when a single dimension is being “collapsed”. The only real operation except feeding the problem to apply is to permute the dimensions with aperm (which you can read about on page 87).
+Binding Arrays
+An operation that is fairly common with higher-dimensional arrays is to bind them together—similar to rbind and cbind with matrices. Here are a couple of examples.
+> jjm3 <- array(1:6, c(2,3))
+> jjm4 <- jjm3 + 7
+> bind.array(jjm3, jjm4, 3)
+,,1
+[,1] [,2] [,3]
+[1,] 1 3 5
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+12.2. ARRAY FUNCTIONS 289 [2,] 2 4 6
+,,2
+[,1] [,2] [,3]
+[1,]    8   10   12
+[2,]    9   11   13
+> bind.array(jjm3, jjm4, 2)
+     [,1] [,2] [,3] [,4] [,5] [,6]
+[1,]    1    3    5    8   10   12
+[2,]    2    4    6    9   11   13
+This last command is the same as a cbind call. Here’s the definition.
+"bind.array"<-
+function(x, y, margin)
+{
+        ldx <- length(dx <- dim(x))
+        ldy <- length(dy <- dim(y))
+        if(ldx != ldy)
+                stop("length of dimensions not equal")
+        margin <- round(margin)
+        if(margin < 1)
+                stop("bad value for margin")
+        if(margin > ldx) {
+                if(margin - ldx == 1) {
+                        dx <- c(dx, 1)
+                        ldx <- ldx + 1
+                        dy <- c(dy, 1)
+                        x <- array(x, dx, if(length(
+                                dimnames(x))) c(
+                                  dimnames(x), list(
+                                  NULL)))
+                        y <- array(y, dy, if(length(
+                                dimnames(x))) c(
+                                  dimnames(y), list(
+                                  NULL)))
+                }
+                else stop("bad value for margin")
+        }
+        if(any(dx[ - margin] != dy[ - margin]))
+                stop("arrays not conformable")
+        newdim <- dx
+        newdim[margin] <- dx[margin] + dy[margin]
+        newdimnames <- dimnames(x)
+        newdimnames[[margin]] <- c(dimnames(x)[[margin
+                ]], dimnames(y)[[margin]])
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+290
+CHAPTER 12.
+ans <- array(x[1], newdim, newdimnames)
+cmd <- paste("ans[", paste(rep(",", margin - 1
+        ), collapse = " "), "1:dx[margin]",
+        paste(rep(",", ldx - margin), collapse
+         = " "), "] <- x")
+eval(parse(text = cmd))
+cmd <- paste("ans[", paste(rep(",", margin - 1
+        ), collapse = " "),
+        "dx[margin] + 1:dy[margin]", paste(rep(
+        ",", ldx - margin), collapse = " "),
+        "] <- y")
+eval(parse(text = cmd))
+ARRAYS
+ans }
+There is a lot of messing around with details, but essentially all that is done is to create the answer to be the right size and shape, then use the eval-parse-text idiom twice to put the inputs into the proper locations of the answer.
+12.3 Things to Do
+Find and fix the bugs in bind.array. A particular one is that it only accepts two arrays. Check how you are doing by looking at the abind function from Statlib submitted by Tony Plate and Rich Heiberger.
+Create a function that generalizes a matrix computation to three-dimensional arrays.
+12.4 Further Reading
+A discussion of computations with matrices is Golub and Van Loan (1983).
+

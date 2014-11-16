@@ -1,0 +1,1324 @@
+S POETRY
+by Patrick J. Burns
+
+Chapter 14: Functions
+
+14.1 Numerical Integration
+14.2 Interpolation
+14.3 Genetic Algorithms
+14.4 Optimization via PORT 
+14.5 Things to Do
+14.6 Further Reading
+14.7 Quotations
+
+
+This chapter concentrates on functions that have functions as arguments, or that return functions.
+14.1 Numerical Integration
+Numerical integration (also known as quadrature) is often useful. The following function performs contour integrals in the complex plane.
+"fjjline.integral"<-
+function(FUN, POINTS, EVALS = 100, ...)
+{
+        n <- length(POINTS)
+        if(n < 2)
+                stop("POINTS must have length at least 2")
+        if(is.character(FUN))
+                FUN <- get(FUN, mode = "function")
+        ans <- 0
+        for(i in 2:n) {
+                this.seq <- seq(POINTS[i - 1], POINTS[
+}
+ans }
+        i], length = EVALS)
+this.ans <- FUN(this.seq, ...)
+ans <- ans + (sum(this.ans) - 0.5 *
+        sum(this.ans[c(1, EVALS)])) * (
+        this.seq[2] - this.seq[1])
+This function takes a function, a vector of points that are the vertices of the contour along which the integration takes place, and the number of function
+319
+320 CHAPTER 14. FUNCTIONS
+evaluations to do in each segment of the contour. Additional arguments for the function being integrated are also accepted. The names of the arguments to fjjline.integral are all in upper case so that their names will not interfere with the names of arguments of the function being integrated.
+The method of integration is quite naive—in a closed contour like the exam- ple below, each point that is evaluated is given the same weight.
+> fjjline.integral(function(z) 1/z, complex(re=c(1,1,-1,-1,1),
++         im=c(-1,1,1,-1,-1)))
+[1] 1.25601e-16+6.283049i
+> pi*2i
+[1] 0+6.283185i
+From theory we know that the true value of this integral is 2πi so we can see how close the numerical integration is to the right answer—it seems to be trying to get it right, but is not terribly accurate.
+Now try another integral for which we know the correct answer.
+> fjjline.integral(function(z) 1, complex(re=c(1,2),
++         im=c(-1,1)))
+[1] NA
+This time we are met with failure. The problem is that the integrand is required to be vectorized, and the function in this example is not.
+With this experience in hand, we can attempt a better version. Not wanting to appear naive, we call the method in the previous version the “trapezoid” method.
+"line.integral"<-
+function(FUN, POINTS, EVALS = 100, METHOD = "simpson",
+{
+...)
+METHOD <- unabbrev.value(METHOD, c("trapezoid",
+        "simpson"))
+n <- length(POINTS)
+if(n < 2)
+        stop("POINTS must have length at least 2")
+switch(METHOD,
+                simpson = {
+# want odd number of evaluation points
+                        if(EVALS %% 2 == 0) EVALS <-
+                                  EVALS + 1
+}
+                )
+        if(is.character(FUN))
+                FUN <- get(FUN, mode = "function")
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+14.1. NUMERICAL INTEGRATION 321
+        ans <- 0
+        for(i in 2:n) {
+}
+ans }
+this.seq <- seq(POINTS[i - 1], POINTS[
+        i], length = EVALS)
+this.ans <- FUN(this.seq, ...)
+if(length(this.ans) != EVALS)
+        stop("FUN not properly vectorized")
+ans <- ans + switch(METHOD,
+        trapezoid = {
+                (sum(this.ans) - 0.5 *
+                  sum(this.ans[c(1,
+                  EVALS)])) * (
+                  this.seq[2] -
+                  this.seq[1])
+}
+,
+simpson = {
+} )
+sum(this.ans * c(1,
+  rep(c(4, 2), length
+   = EVALS - 2), 1))/3 *
+  (this.seq[2] -
+  this.seq[1])
+The result of both of the previous examples is now much improved.
+> line.integral(function(z) 1/z, complex(re=c(1,1,-1,-1,1),
++         im=c(-1,1,1,-1,-1)))
+[1] 1.480297e-16+6.283185i
+> pi * 2i
+[1] 0+6.283185i
+> line.integral(function(z) 1, complex(re=c(1,2),
++         im=c(-1,1)))
+Error in line.integral(function(z): FUN not properly
+vectorized
+Dumped
+Note that the check on vectorization is not foolproof—if you use max where you should use pmax, for instance, the function can give answers that are the correct length but are wrong.
+Real-valued integrations can be done by both line.integral and the S- PLUS function integrate, so the results can be compared. In the following
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+322 CHAPTER 14. FUNCTIONS case, we are subtracting a very accurate way of evaluating a value from the
+numerical integration.
+> integrate(dnorm, -1, 1)$integral - diff(pnorm(c(-1,1)))
+[1] -2.220446e-16
+> line.integral(dnorm, c(-1, 1), EV=5000) - diff(pnorm(c(-1,1)))
+[1] -7.249756e-14
+Even with a lot of evaluations, Simpson’s method is significantly less accurate than the adaptive technique that integrate employs. However, line.integral takes only about half as much time as integrate for this problem.
+> p.unix.time(for(i in 1:100) line.integral(dnorm,
++       c(-1, 1), EV=5000))
+ comp time clock time  memory
+      6.89          7 1763672
+> p.unix.time(for(i in 1:100) integrate(dnorm, -1, 1))
+ comp time clock time  memory
+     12.85         13 2511336
+The difference in both accuracy and computation time will vary from problem to problem—my suspicion is that this probably overstates the time advantage of line.integral for the typical problem.
+In applications where speed is more important than accuracy, it could be profitable to substitute line.integral for integrate. However, if the inte- grand is not nicely behaved, then integrate is likely to do much better.
+14.2 Interpolation
+Function interpolation is useful when it is expensive to evaluate the function. The strategy is to evaluate the function exactly at a few points, and then to approximate the function at other points within the interval in which the exact values are known.
+One of the better methods is Lagrange interpolation. If we know the value of function f at n points xi, then the Lagrange interpolation formula for the approximating function f ̃ is
+where
+ﰪ (x−xi) lk(x) = ﰪ i̸=k
+ﰫn  ̃
+lk(x)f(xk)
+(14.1)
+(14.2)
+f(x) =
+k=1
+￼i̸=k (xk−xi)
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+14.2. INTERPOLATION 323
+To get a function that interpolates for the sine function we need to start with a vector of x-values and the sine of those values. The next task is to translate Lagrange’s formula into S. First we get the known values:
+> jjsx <- seq(0, pi/2, len=5)
+> jjsy <- sin(jjsx)
+Then we write the function to do interpolation with them:
+function(x)
+{
+}
+x.know <- jjsx
+y.know <- jjsy
+if(length(x) != 1)
+        stop("x must have length 1")
+if(x < min(x.know) || x > max(x.know))
+        stop("x not in interval")
+tab <- outer(x.know, x.know, "-")
+diag(tab) <- 1
+den <- apply(tab, 1, prod)
+tab <- outer(rep(x, length(x.know)), x.know,
+        "-")
+diag(tab) <- 1
+num <- apply(tab, 1, prod)
+sum((y.know * num)/den)
+Obviously we don’t really care about having a function that approximates the sine—S already has a function that approximates the sine very well. What we do want is a way of creating an S function that approximates a function of our choice. The following function takes a vector of x values and a vector of corresponding values of the mathematical function of interest and returns an S function that is the Lagrange interpolation of the data.
+"fjjinterpolator.lagrange"<-
+function(x, y)
+{
+        if(length(x) != length(y))
+                stop("x and y must be the same length")
+        ans <- function(z)
+        {
+        }
+        body <- expression(if(length(z) != 1) stop(
+                        "z must have length 1"), NULL,
+                NULL, NULL, NULL, sum(y.den * apply(
+                tab, 1, prod)))
+        mode(body) <- "{"
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+324
+CHAPTER 14. FUNCTIONS
+body[[2]] <- substitute(if(z < minx || z >
+        maxx) stop("z not in interval of known x values"
+                ), list(minx = min(x), maxx =
+        max(x)))
+tab <- outer(x, x, "-")
+diag(tab) <- 1
+den <- apply(tab, 1, prod)
+body[[3]] <- call("assign", "y.den", y/den)
+body[[4]] <- substitute(tab <- outer(rep(z,
+        xlen), x, "-"), list(xlen = length(x),
+        x = x))
+body[[5]] <- parse(text = "diag(tab) <- 1")[[1
+        ]]
+ans[[length(ans)]] <- body
+ans }
+The result of this function will be a function of one argument, so the ans variable is assigned a one-argument function—the argument will be called z. What the function actually does comes later. The start of this is to create body that is an expression of the correct length and has a couple of the commands filled in. Then body is coerced to be of mode “brace”—this is the mode we want it to end up being, and mode expression has exhausted its usefulness at this point. Skipping to the end, body is attached to ans and ans is returned. Body my house my horse my hound 37
+In the middle of the function there are three methods of adding commands to body. substitute provides very useful functionality—it takes an expression as its first argument and a named list as its second. Values of variables that are in the list are substituted into the expression; other names are left as is. When a command is to be created and there is nothing to substitute in, then you can use call, or you can use the text argument in parse.
+Here is the result with the sine data.
+> fjjinterpolator.lagrange(jjsx, jjsy)
+function(z)
+{
+        if(length(z) != 1)
+                stop("z must have length 1")
+        if(z < 0 || z > 1.5707963267949)
+                stop("z not in interval of known x values")
+        assign("y.den", c(0, -2.68193882509428,
+                7.43336516385593, -6.47477308499758,
+                1.75206097146613))
+        tab <- outer(rep(z, 5), c(0, 0.392699081698724,
+                0.785398163397448, 1.17809724509617,
+                1.5707963267949), "-")
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+14.2. INTERPOLATION 325 diag(tab) <- 1
+        sum(y.den * apply(tab, 1, prod))
+}
+The major shortcoming of this is that it is not vectorized. So we go to work and come up with a function to interpolate sine that is vectorized.
+function(z)
+{
+}
+out <- (z < min(jjsx) | z > max(jjsx))
+z[out] <- NA
+tab <- outer(jjsx, jjsx, "-")
+diag(tab) <- 1
+den <- apply(tab, 1, prod)
+zlen <- length(z)
+tab <- outer(array(rep(z, rep(length(den),
+        zlen)), c(length(den), zlen)), jjsx,
+        "-")
+tab <- aperm(tab, c(1, 3, 2))
+tab[row(tab) == col(tab)] <- 1
+num <- apply(tab, c(1, 3), prod)
+drop(rep(1, length(jjsy)) %*% ((jjsy * num)/
+den))
+The single-value version required outer to create a matrix. This merely adds another dimension for the values in the input, so now outer creates a three- dimensional array. Once this function is written and we know that it works, we can use it as a template.
+"interpolator.lagrange"<-
+function(x, y)
+{
+        if(length(x) != length(y))
+                stop("x and y must be the same length")
+        ans <- function(z)
+        {
+        }
+        body <- expression(zlen <- length(z), NULL,
+                NULL, z[zout] <- NA, NULL, tabz <-
+                array(rep(z, rep(ilen, zlen)), c(ilen,
+                zlen)), NULL, tab <- aperm(tab, c(1, 3,
+                2)), tab[row(tab) == col(tab)] <- 1,
+                num <- apply(tab, c(1, 3), prod), ans <-
+                rep(1, ilen) %*% (y.den * num),
+                attributes(ans) <- attributes(z), ans)
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+326
+CHAPTER 14. FUNCTIONS
+mode(body) <- "{"
+body[[2]] <- substitute(ilen <- length.x, list(
+        length.x = length(x)))
+body[[3]] <- substitute(zout <- (z < minx | z >
+        maxx), list(minx = min(x), maxx = max(
+        x)))
+tab <- outer(x, x, "-")
+diag(tab) <- 1
+den <- apply(tab, 1, prod)
+body[[5]] <- call("assign", "y.den", y/den)
+body[[7]] <- substitute(tab <- outer(tabz, x,
+        "-"), list(x = x))
+ans[[length(ans)]] <- body
+test <- all.equal(ans(x), y)
+if(!is.logical(test) || !test)
+        stop("function didn’t build correctly")
+ans }
+This includes a test at the end to see if the resulting function looks reasonable. We know that the interpolation should be exact at the input points, and this is an easy thing to check. When we humans solve a problem, it is good practice to check if the answer seems sensible. There’s no reason that programs shouldn’t do the same.
+Here we try it out.
+> fjjsin.il <- interpolator.lagrange(jjsx, jjsy)
+> fjjsin.il
+function(z)
+{
+        zlen <- length(z)
+        ilen <- 5
+        zout <- (z < 0 | z > 1.5707963267949)
+        z[zout] <- NA
+        assign("y.den", c(0, -2.68193882509428,
+                7.43336516385593, -6.47477308499758,
+                1.75206097146613))
+        tabz <- array(rep(z, rep(ilen, zlen)), c(ilen,
+                zlen))
+        tab <- outer(tabz, c(0, 0.392699081698724,
+                0.785398163397448, 1.17809724509617,
+                1.5707963267949), "-")
+        tab <- aperm(tab, c(1, 3, 2))
+        tab[row(tab) == col(tab)] <- 1
+        num <- apply(tab, c(1, 3), prod)
+        ans <- rep(1, ilen) %*% (y.den * num)
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+14.3. GENETIC ALGORITHMS 327
+        attributes(ans) <- attributes(z)
+ans }
+We can see how it does by plotting the error of the Lagrange interpolation and the error of linear interpolation.
+> jjx1 <- seq(0, pi/2, len=200)
+> matplot(jjx1, cbind(approx(jjsx, jjsy, xout=jjx1)$y,
++       fjjsin.il(jjx1)) - sin(jjx1), type="l")
+Note that you can get terrible performance from interpolation if your func- tion does not behave the way that the interpolation method presumes of func- tions. Interpolation is not something to do thoughtlessly.
+14.3 Genetic Algorithms
+Genetic algorithms are a type of random algorithm that are used for optimiza- tion (among other things). The basic idea is to have a population of solu- tions that improves relative to the objective through a “survival of the fittest” mechanism. Reasons to use a genetic algorithm rather than something like a Newton-Raphson or conjugate gradient technique are:
+• There are multiple local optima.
+• The objective function is not differentiable.
+• The number of parameters is very large, so gradient techniques are very slow.
+As in Hollywood movies, the main ingredients for a genetic algorithm are sex and violence. There needs to be a mechanism for children to be born based on a random selection of attributes of members of the population. Then there needs to be a way to decide who is to live so that the population size remains constant (or at least relatively constant).
+The following function implements a crude genetic algorithm. The basic form of it, though, resembles many of the algorithms that I use in practice. Two members of the population are selected at random, a child is created by mixing the elements from the two parents. The best two of the three survive. Someone once called this the Oedipus algorithm—kill your father, marry your mother. If a child survives, then it is “jittered” in an attempt to find a better solution nearby. This function operates on logical vectors, as traditional genetic algorithms do.
+"fjjgenop1"<-
+function(FUN, POP, BIRTHS = 100, JITTERS = 3, PROB = 0.3, MUTATE =
+{
+0.02, TRACE = T, ...)
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+328
+CHAPTER 14. FUNCTIONS
+random.seed <- .Random.seed
+if(is.character(FUN))
+        FUN <- get(FUN)
+if(!is.matrix(POP))
+        stop("bad input for POP")
+if(!is.logical(POP))
+        stop("this is for logical populations only")
+popsize <- ncol(POP)
+objective <- numeric(popsize)
+for(i in 1:popsize) {
+        objective[i] <- FUN(POP[, i], ...)
+}
+funevals <- popsize
+npar <- nrow(POP)
+if(PROB <= 0 || PROB >= 1)
+        stop("bad value for PROB")
+PROB <- c(PROB, 1 - PROB)
+if(MUTATE <= 0 || MUTATE >= 1)
+        stop("bad value for MUTATE")
+MUTATE <- c(MUTATE, 1 - MUTATE)
+if(TRACE)
+        cat("objectives are from", min(objective), "to", max(
+                objective), "\n")
+for(i in 1:BIRTHS) {
+        parents <- sample(popsize, 2, rep = F)
+        child <- POP[, parents[1]]
+        cloc <- sample(c(F, T), npar, rep = T, prob = PROB)
+        if(all(cloc))
+                cloc[sample(npar, 1)] <- F
+        else if(all(!cloc))
+                cloc[sample(npar, 1)] <- T
+        child[cloc] <- POP[cloc, parents[2]]
+        child.obj <- FUN(child, ...)
+        funevals <- funevals + 1
+        survive <- child.obj < max(objective[parents])
+        if(TRACE)
+                cat("parents:", format(objective[parents]),
+                        "child:", format(child.obj), if(
+                        survive) "(improve)", "\n")
+        if(survive) {
+                if(objective[parents[1]] > objective[parents[
+2]])
+                        out <- parents[1]
+                else out <- parents[2]
+                if(TRACE && child.obj < min(objective))
+                        cat("new minimum\n")
+                POP[, out] <- child
+                objective[out] <- child.obj
+                for(i in seq(length = JITTERS)) {
+                        cloc <- sample(c(T, F), npar, rep = T,
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+14.3. GENETIC ALGORITHMS
+329
+}
+} }
+  prob = MUTATE)
+if(all(!cloc))
+  cloc[sample(npar, 1)] <- T
+jchild <- child
+jchild[cloc] <- !child[cloc]
+jchild.obj <- FUN(jchild, ...)
+funevals <- funevals + 1
+if(jchild.obj < child.obj) {
+  if(TRACE) {
+    cat("jitter successful,",
+      "new objective", jchild.obj,
+      "\n")
+    if(jchild.obj < min(objective))
+      cat(" new minimum\n")
+  }
+  POP[, out] <- child <- jchild
+  objective[out] <- child.obj <-
+jchild.obj }
+}
+ord <- order(objective)
+list(population = POP[, ord], objective = objective[ord],
+        funevals = funevals, random.seed = random.seed, call
+         = match.call())
+The main purpose for writing this function is to compare how well it does on one of the problems studied by Jennison and Sheehan (1995). They studied the simple problem of maximizing
+ﰫp i=1
+All of the ai are positive so the function is obviously maximized when all of the xi are 1 (or TRUE in our function). Jennison and Sheehan give the complete details only for their 20 dimensional problem, so that is the one we’ll use. Here is the S function to be minimized.
+> fjj.jsa20
+function(x)
+ - sum(x * jsa20)
+> jsa20
+ [1] 2.10 1.89 1.03 1.69 1.24 1.02 3.36 1.43 2.15 1.43
+[11] 1.54 2.35 2.39 1.12 1.00 3.66 1.09 1.10 3.01 1.18
+The following function keeps track of how well fjjgenop1 does on the prob- lem for a number of evaluations.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+g(x)=
+aixi xi ∈{0,1}
+
+330 CHAPTER 14.
+"fjjgentest1"<-
+function(trials = 100, ...)
+{
+FUNCTIONS
+}
+funev <- numbest <- numeric(trials)
+for(i in 1:trials) {
+        this.one <- fjjgenop1(fjj.jsa20,
+                matrix(sample(c(F, T), rep = T,
+                400), 20), ...)
+        funev[i] <- this.one$funeval
+        numbest[i] <- sum(this.one$popula[, 1])
+}
+list(funevals = funev, numbest = numbest, call
+         = match.call())
+The results look reasonable using the defaults. The first thing to look at is the number of elements of the best solution that were TRUE in each of the trials. 77 of the 100 evaluations found the correct answer, and only one time did the best solution contain more than one FALSE.
+> table(gentest1.res1$numbest)
+ 18 19 20
+  1 22 77
+> summary(gentest1.res1$funeval)
+ Min. 1st Qu. Median Mean 3rd Qu. Max.
+  306     321    330  330     336  351
+When jittering is used, the number of function evaluations is random. The call to summary indicates the distribution of the number of function evaluations used.
+This performance is much better than that reported by Jennison and Shee- han with the traditional genetic algorithm that they used. The performance of fjjgenop1 seems adequate to me.
+Since the problem is so simple, I hypothesized that the jittering might be slowing down the algorithm. To test this, I set the number of jitters to zero and the number of births to 400.
+> table(gentest1.res0.4$numbest)
+ 17 18 19 20
+3 43162
+> summary(gentest1.res0.4$funeval)
+ Min. 1st Qu. Median Mean 3rd Qu. Max.
+  420     420    420  420     420  420
+The result is worse while using more function evaluations. So jittering is useful even in this artificially simple problem.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+14.3. GENETIC ALGORITHMS 331
+The genopt function, listed below, is a more useful function that minimizes a function via a genetic algorithm. First off, it presumes that the parameters are real-valued rather than binary—a much more common case. Box constraints
+are allowed on the parameters; this is easy to do, and decidedly useful enough to be worth the effort.
+In fjjgenop1 the argument names were all in upper case to avoid conflicts with additional arguments for the function being optimized. With so many arguments capitalized, the solution becomes almost as ugly as the problem. The genopt function has the argument add.args that is expected to be a list of the additional arguments. This avoids the possibility of name conflicts altogether, and frees up the three-dots for a different task.
+The population argument to genopt can be a matrix whose columns are each a parameter vector in the initial population, or it can be the result of a previous call to genopt. In the latter case it is of importance that the function being optimized is not re-evaluated for the population. Thus, genopt can be called repeatedly with the population equal to the result of the last call, so the effect is like asking for a large number of births but getting intermediate results.
+Another addition in genopt is a purely random phase. Parameter vectors are created by some random mechanism that does not care about the parameters within the population. A parameter vector that has a better objective than the worst member of the population replaces that member. The improvement in the population resulting from the random phase can greatly improve the efficacy of the genetic phase. The creation of the random vectors in genopt is quite ad hoc—a better method should be used for specific applications.
+genopt saves the random seed that it started with, so that the computations can be reproduced, if desired.
+Without further ado, here is the definition of genopt.
+"genopt"<-
+function(fun, population, lower =  - Inf, upper = Inf, scale =
+{
+dcontrol["eps"], add.args = NULL, control = genopt.control(
+...), ...)
+random.seed <- .Random.seed
+if(is.character(fun))
+        fun <- get(fun, mode = "function")
+fun.args <- c(list(NULL), add.args)
+go.rectify <- function(pars, lower, upper)
+{
+        pars[pars < lower] <- lower[pars < lower]
+        pars[pars > upper] <- upper[pars > upper]
+        pars
+}
+if(is.list(population)) {
+        objective <- population$objective
+        funevals <- population$funevals
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+332
+CHAPTER 14. FUNCTIONS
+population <- population$population
+popsize <- ncol(population)
+if(is.null(popsize) || length(objective) != popsize)
+        stop("bad input population")
+if(!is.numeric(funevals) || is.na(funevals)) {
+} }
+else {
+funevals <- 0
+warning("funevals starting at 0")
+if(!is.matrix(population))
+        stop("bad input population")
+popsize <- ncol(population)
+objective <- numeric(popsize)
+npar <- nrow(population)
+lower <- rep(lower, length = npar)
+upper <- rep(upper, length = npar)
+if(any(upper < lower))
+        stop("upper element smaller than lower")
+for(i in 1:popsize) {
+        population[, i] <- fun.args[[1]] <-
+                go.rectify(population[, i], lower,
+                upper)
+        objective[i] <- do.call("fun", fun.args)
+funevals <- popsize
+}
+}
+icontrol <- control$icontrol
+dcontrol <- control$dcontrol
+trace <- icontrol["trace"]
+minobj <- min(objective)
+npar <- nrow(population)
+if(trace) {
+        cat("objectives go from", format(minobj), "to",
+                format(max(objective)), "\n")
+}
+if(icontrol["random.n"]) {
+        par.range <- apply(population, 1, range)
+        par.range[2, par.range[2,  ] == par.range[1,  ]] <-
+                par.range[2, par.range[2,  ] == par.range[1,
+                ]] + dcontrol["scale.min"]
+        maxobj <- max(objective)
+        for(i in 1:icontrol["random.n"]) {
+                fun.args[[1]] <- runif(npar, par.range[1,  ],
+                        par.range[2,  ])
+                this.obj <- do.call("fun", fun.args)
+                if(this.obj < maxobj) {
+                        maxind <- order(objective)[popsize]
+                        population[, maxind] <- fun.args[[1]]
+                        objective[maxind] <- this.obj
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+14.3. GENETIC ALGORITHMS
+} }
+333
+maxobj <- max(objective)
+        if(trace) {
+                cat("objectives go from", format(minobj),
+                        "to", format(maxobj), "\n")
+} }
+njit <- icontrol["jitters.n"]
+lower <- rep(lower, length = npar)
+upper <- rep(upper, length = npar)
+if(any(upper < lower))
+        stop("upper element smaller than lower")
+scale[scale < dcontrol["scale.min"]] <- dcontrol["scale.min"]
+scale <- rep(scale, length = npar)
+prob <- dcontrol["prob"]
+prob <- c(prob, 1 - prob)
+maxeval <- icontrol["maxeval"]
+for(i in 1:icontrol["births"]) {
+        if(funevals >= maxeval)
+                break
+        parents <- sample(popsize, 2)
+        child <- population[, parents[1]]
+        cloc <- sample(c(T, F), npar, rep = T, prob = prob)
+        if(all(cloc))
+                cloc[sample(npar, 1)] <- F
+        else if(all(!cloc))
+                cloc[sample(npar, 1)] <- T
+        child[cloc] <- population[cloc, parents[2]]
+        fun.args[[1]] <- child
+        child.obj <- do.call("fun", fun.args)
+        funevals <- funevals + 1
+        parent.obj <- objective[parents]
+        survive <- child.obj < max(parent.obj)
+        if(trace) {
+                cat(i, "parents:", parent.obj, "child:",
+                        format(child.obj), if(survive)
+                          "(improve)", "\n")
+        }
+        if(survive || (child.obj == parent.obj[1] &&
+                child.obj == parent.obj[2])) {
+                if(parent.obj[1] > parent.obj[2])
+                        out <- parents[1]
+                else out <- parents[2]
+                population[, out] <- child
+                objective[out] <- child.obj
+                if(trace && child.obj < minobj) {
+                        minobj <- child.obj
+                        cat("new minimum\n")
+}
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+334
+CHAPTER 14. FUNCTIONS
+for(i in seq(length = njit)) {
+        fun.args[[1]] <- jchild <- go.rectify(
+}
+} }
+  rnorm(npar, child, scale), lower,
+  upper)
+jchild.obj <- do.call("fun", fun.args
+  )
+funevals <- funevals + 1
+if(jchild.obj < child.obj) {
+  child <- population[, out] <-
+    jchild
+  child.obj <- objective[out] <-
+    jchild.obj
+  if(trace) {
+    cat("jitter successsful:", format(
+      jchild.obj), "\n")
+    if(jchild.obj < minobj) {
+      cat("new minimum\n")
+      minobj <- jchild.obj
+    }
+} }
+}
+ord <- order(objective)
+list(population = population[, ord], objective = objective[
+        ord], funevals = funevals, random.seed = random.seed,
+        call = match.call())
+It would be much nicer if each birth and the jittering were abstracted into functions. The difficulty with this is how information is to be passed in and out of the functions.
+An important feature of genopt is that it uses the “control” paradigm that was introduced into S with some of the statistical modeling functions (Cham- bers and Hastie, 1992). There is a control argument that expects an object containing a number of items that control the computation. This list can be cre- ated with a separate function—in this case called genopt.control. Often, as in genopt, the three-dots of the main function allows individual control arguments to be given. This is a convenient and powerful convention.
+"genopt.control"<-
+function(births = 100, random.n = 0, jitters.n = 3,
+{
+trace = T, eps = 0.1, prob = 0.3, scale.min =
+1e-12, maxeval = Inf)
+dcon <- c(eps = eps, prob = prob, scale.min =
+        scale.min)
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+14.3. GENETIC ALGORITHMS 335
+}
+icon <- c(births = births, random.n = random.n,
+        jitters.n = jitters.n, trace = trace,
+        maxeval = maxeval)
+list(icontrol = icon, dcontrol = dcon)
+For use within S, the division between integer and floating-point numbers is unnecessary. However, in C it matters greatly. This function would not need to change if the optimization were put into C.
+The genopt function can be used as a model for a function that specializes the optimization. Such a function could use genopt.control if no new con- trol arguments were necessary (unused ones pose no problem). A new control function would be required if new controls were used.
+The Jennison and Sheehan problem can be made a little harder by letting the parameters be real-valued between 0 and 1, instead of only 0 or 1. Here’s an approach to solving this problem with genopt. The first command indicates what the true minimum is.
+> -sum(jsa20)
+[1] -35.78
+> jj1 <- genopt(fjj.jsa20, matrix(runif(400),20), lower=0,
++         upper=1, trace=F)
+> summary(jj1$objective)
+   Min. 1st Qu. Median   Mean 3rd Qu.   Max.
+ -31.45  -30.06 -29.32 -29.09  -28.49 -25.32
+> jj2 <- genopt(fjj.jsa20, jj1, lower=0, upper=1, trace=F)
+> summary(jj2$objective)
+   Min. 1st Qu. Median   Mean 3rd Qu.   Max.
+ -33.72     -33 -32.44 -32.49  -32.08 -31.16
+> summary(jj2$population[,1])
+   Min. 1st Qu. Median   Mean 3rd Qu. Max.
+0.7201 0.8724 0.9713 0.9248 11 > jj2$funeval
+[1] 646
+This is obviously harder than the binary problem, but we’re not doing so terrible with 650 function evaluations.
+The problem can be made more realistic by adding a constraint to the prob- lem. Suppose that we still want to minimize fjj.jsa20 but there is the con- straint that the sum of the parameters can be no more than 10. This new problem is known as a knap-sack problem; there is an S function called napsack for one class of knap-sack problems. An inexact but often effective way of deal- ing with constraints is to add a penalty to the objective if constraints are violated.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+336 CHAPTER 14. FUNCTIONS Here is a new function to be optimized that includes a penalty for the con-
+straint.
+> fjj.jsa20sum
+function(x, limit = 10, cost = 2)
+{
+        objective <-  - sum(x * jsa20)
+        violation <- max(0, sum(x) - limit)
+        objective + violation * cost
+}
+Naively you may think that the cost parameter should be infinite. An infinite cost causes a discontinuity, so the cost obviously can’t be infinite when using this trick with derivative-based optimizers. Genetic algorithms don’t fail on account of discontinuity, but you still don’t want the cost to be excessively high because you want to guide the algorithm toward the right place.
+Here we see what the true optimum is, and then evaluate how well we are doing with the constraint and the objective.
+> -sum(sort(jsa20)[11:20])
+[1] -24.14
+> jj3 <- genopt(fjj.jsa20sum, matrix(runif(400),20),
++         lower=0, upper=1, trace=F, random=100)
+> apply(jj3$population, 2, sum)
+ [1] 10.344031 10.250866 10.020323 10.024000  9.676853
+ [6] 10.319002 10.850953 10.436489 10.074452 11.640020
+[11] 10.594859 10.476254 10.747117  9.692068 11.048758
+[16] 10.157180 10.057599 11.963033 10.322911 10.842347
+> summary(jj3$objective)
+  Min. 1st Qu. Median   Mean 3rd Qu.   Max.
+ -22.1  -21.65 -21.23 -21.24  -20.95 -19.59
+At this point the constraint isn’t obeyed very well, but not egregiously violated, and the objectives aren’t so bad. The default cost is almost surely too small, so we give a different value of cost to fjj.jsa20sum.
+> jj4 <- genopt(fjj.jsa20sum, jj3, lower=0, upper=1,
++         add.arg=list(cost=50), trace=F)
+> apply(jj4$population, 2, sum)
+ [1]  9.934612  9.639238  9.803568  9.894391  9.854145
+ [6] 10.344031 10.250866 10.020323  9.640379  9.880965
+[11]  9.858581  9.731130 10.074452  9.991200 11.640020
+[16]  9.979223 10.594859 10.476254  9.819179 10.057599
+> summary(jj4$objective)
+   Min. 1st Qu. Median   Mean 3rd Qu.   Max.
+ -22.32  -22.11 -21.62 -21.65  -21.31 -20.84
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+14.3. GENETIC ALGORITHMS 337 > jj4$funeval
+[1] 442
+Often a much better solution can be found by inserting into a population the best solution from each of two or more independent runs of the genetic algorithm. This is the strategy with jj4 and jj5 that arrives at jj6.
+> jj5 <- genopt(fjj.jsa20sum, matrix(runif(400),20),
++         lower=0, upper=1, trace=F, random=100,
++         add.arg=list(cost=50))
+> apply(jj5$population, 2, sum)
+ [1] 9.975258 9.975258 9.871977 9.756353 9.206575
+ [6] 9.287558 9.808857 9.701156 8.964027 9.923369
+[11] 9.538543 9.761804 9.400245 9.392638 9.536091
+[16] 9.811276 9.800468 9.985085 9.809348 9.582101
+> summary(jj5$objective)
+   Min. 1st Qu. Median   Mean 3rd Qu.   Max.
+ -21.72  -20.51 -19.78 -19.97  -19.24 -18.59
+> jjp1 <- cbind(jj4$pop[,1], jj5$pop[,1], matrix(
++         runif(400),20))
+> jj6 <- genopt(fjj.jsa20sum, jjp1, lower=0, upper=1,
++         trace=F, random=100, birth=500,
++         add.arg=list(cost=50))
+> apply(jj6$population, 2, sum)
+ [1] 9.899633 9.890572 9.932042 9.881737 9.919993
+ [6] 9.969054 9.934612 9.785121 9.970647 9.679190
+[11] 9.848886 9.852910 9.947428 9.570757 9.961821
+[16] 9.961821 9.972682 9.931718 9.876357 9.995824
+[21] 9.979015 9.966458
+> summary(jj6$objective)
+   Min. 1st Qu. Median   Mean 3rd Qu.   Max.
+ -22.82  -22.33 -22.16 -22.16  -21.92 -21.46
+For many applications, S is the wrong place for a genetic algorithm. To be effective a genetic algorithm requires a great number of function evaluations. If the function being optimized does not involve heavy computing, then the opti- mization should be in C or another compiled language. But if each evaluation will take a long time anyway, then the overhead of the genetic algorithm in S will be negligible.
+The one problem that a genetic algorithm can have is that it doesn’t go to the optimum. One way this occurs is that the population initially moves well but too soon everyone in the population is very similar—premature convergence. Another popular way is for the population not to move much at all. As the pop- ulation size goes from tiny to huge, you will go from the first of these problems to the second. So choosing the population size is important—the proper choice depends on the particular problem and on the use to which the result is put.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+338 CHAPTER 14. FUNCTIONS
+On one extreme, I’ve chosen a population of size 10 in an application. A genetic algorithm is used to get a starting point for a derivative-based optimizer because there are local minima, and because the number of parameters can be very large, and each function evaluation is reasonably expensive. In cases where the result needs to be close to the true optimum and the cost of function evaluations is insignificant in comparison, then a population size of hundreds is probably not too many. In run-of-the-mill situations, I tend to use population sizes of 20 to 50, but I have no basis in fact for doing so.
+The main thing to get right in a genetic algorithm is the genetics. If what you are using in the population to represent each solution does not map well into the objective to be optimized, then the algorithm will be ineffective. One good reason to use S for genetic algorithms is because S makes it easy to use whatever is best at representing the solutions. The development of genetic algorithms is limited primarily by our imaginations.
+14.4 Optimization via PORT
+The PORT library is some of the best optimization software that is freely avail- able. This comes out of Bell Labs and was written by David Gay and associates. Both of the S-PLUS functions nlminb and nlmin are based on PORT routines.
+A drawback of these two functions is that they are slow because they use S functions. The portopt1 and portoptgen functions discussed below provide a way of optimizing a function written in C or Fortran but getting the results in S.
+Simple interface
+The portopt1 function allows you to minimize a C or Fortran function that has just two arguments, the vector of parameters over which the optimization occurs and the length of the vector. This is not terribly useful functionality, but it gives us a foothold on the problem.
+"portopt1"<-
+function(fun.address, start, lower =  - Inf, upper = Inf, scale = 1,
+{
+control = portopt.control(...), ...)
+if(fun.address == 0)
+        stop("symbol not loaded")
+p <- length(start)
+if(length(scale) != 1 && length(scale) != p)
+        stop("bad length for ’scale’ argument")
+if(any(scale) <= 0)
+        stop("nonpositive scale vector")
+scale <- rep(scale, length = p)
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+14.4. OPTIMIZATION VIA PORT 339
+        if((length(lower) != 1 && length(lower) != p) || (length(
+                upper) != 1 && length(upper) != p))
+                stop("bad length for lower or upper")
+        big <- 1e+30
+        lower[lower <  - big] <-  - big
+        upper[upper > big] <- big
+        lower <- rep(lower, length = p)
+        upper <- rep(upper, length = p)
+        if(any(lower > upper))
+                stop("box constraints are infeasible")
+        liv <- 59 + p
+        lv <- 77 + (p * (p + 23))/2
+        init <- .Fortran("divset",
+                as.integer(2),
+                iv = integer(liv),
+                as.integer(liv),
+                as.integer(lv),
+                v = double(lv))[c("iv", "v")]
+        if(init$iv[1] != 12)
+                stop("abnormal return from divset")
+        icontrol <- control$icontrol
+        init$iv[17:18] <- icontrol[c("eval.max", "iter.max")]
+        dnam <- c("abs.tol", "rel.tol", "x.tol", "step.min",
+                "step.max", "sing.step", "sing.tol", "scale.tol",
+                "scale.mod", "scale.fac", "diff.grad")
+        dcvec <- control$dcontrol[dnam]
+        dmiss <- is.na(dcvec)
+        init$v[c(31:37, 39:42)[!dmiss]] <- dcvec[!dmiss]
+        names(upper) <- names(start)
+        limits <- rbind(lower = lower, upper = upper)
+        storage.mode(limits) <- "double"
+        ans <- .C("portopt_one_Sp",
+                as.integer(liv),
+                as.integer(lv),
+                iv = as.integer(init$iv),
+                v = as.double(init$v),
+                as.integer(icontrol),
+                objective = double(1),
+                npar = as.integer(p),
+                limits = limits,
+                scale = as.double(scale),
+                as.integer(fun.address),
+                parameters = as.double(start))[c("parameters",
+                "objective", "iv", "limits")]
+        msg <- switch(ans$iv[1] - 2,
+                "X convergence",
+                "relative function convergence",
+                "both X and relative function convergence",
+                "absolute function convergence",
+                "singular convergence",
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+340
+CHAPTER 14. FUNCTIONS
+        "false convergence",
+        "function evaluation limit reached",
+        "iteration limit reached",
+        stop("invalid output code 11"),
+        stop("invalid output code 12"),
+        stop("invalid output code 13"),
+        stop("LIV is too small"),
+        stop("LV is too small"),
+        stop("invalid output code 17"),
+        stop("negative component in scale vector"),
+        stop("cannot complete optimization"))
+ans$convergence <- msg
+ans$call <- match.call()
+ans$iv <- NULL
+ans
+}
+This is really a simple function despite its length. It starts out checking for misspecification of arguments and getting those arguments ready to be used in the optimization. Then it calls a Fortran function that initializes the two special arrays for the optimizer, and then changes control arguments as needed. Then the optimizer is invoked through the call to C, and finally the result is fixed up for the return.
+The novel part is the C code that arranges for the optimization to take place.
+#include <S.h>
+void
+portopt_one_Sp(liv, lv, iv, v, icontrol, objective, npar, limits,
+        scale, f_addr, par)
+long *liv, *lv, *iv, *icontrol, *npar;
+double *v, *objective, *limits, *scale, *par;
+double (**f_addr)();
+{
+        long i, iter_max = iv[17], trace = icontrol[2], iternum=-1;
+        if(iter_max) {
+                F77_CALL(mnb0)(npar, par, scale, limits,
+                        objective, liv, iv, lv, v);
+                *objective = (**f_addr)(par, npar);
+                if(is_na(objective, DOUBLE) ||
+                                is_inf(objective, DOUBLE)) {
+                        iv[1] = 1;
+                }
+                while(iv[0] < 3 && iternum < iter_max) {
+                        if(iv[30] != iternum) {
+                                iternum = iv[30];
+if(trace) {
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+14.4. OPTIMIZATION VIA PORT 341
+}
+                           printf("iter: %d  objective: %g\n",
+                                        iternum, *objective);
+                           fflush(stdout);
+                        }
+                }
+                F77_CALL(mnb0)(npar, par, scale, limits,
+                        objective, liv, iv, lv, v);
+                *objective = (**f_addr)(par, npar);
+                if(is_na(objective, DOUBLE) ||
+                                is_inf(objective, DOUBLE)) {
+                        iv[1] = 1;
+} }
+}
+*objective = (**f_addr)(par, npar);
+The first thing you may notice is that the code is complicated by a test to see if the maximum number of iterations is zero. I’ve found the extra bother to be well worth it—there are a surprising number of instances in which doing nothing is desired. The operative part of this function is a while loop that does four things. It updates the iteration number if necessary and prints the iteration information if asked to. It then calls the PORT optimizer, the Fortran function mnb0. Next it calls the function to be optimized with the parameter vector that the optimizer set. Finally it notifies the optimizer if trouble is afoot.
+Perhaps you are puzzled by the declaration:
+double (**f_addr)();
+The number that is contained in the S vector is the address of the function, that is, it is a pointer to the function. Whatever S passes into C is a pointer to that information, so we have a pointer to a pointer to the function. S always thinks in terms of vectors—if there were addresses for a number of functions contained in the S vector passed into C, the declaration would remain the same.
+portopt1 follows the convention of a control argument that is supplied by a “something.control” function. The portopt.control function is a little different in that it uses missing values for some of its defaults because the real defaults are created elsewhere.
+"portopt.control"<-
+function(eval.max = 5000, iter.max = 150, abs.tol = NA,
+{
+rel.tol = NA, x.tol = NA, step.min = NA,
+step.max = NA, sing.step = NA, sing.tol = NA,
+scale.tol = NA, scale.mod = NA, scale.fac = NA,
+diff.grad = NA, trace = T)
+icontrol <- c(npar = NA, eval.max = eval.max,
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+342
+CHAPTER 14. FUNCTIONS
+        iter.max = iter.max, trace = trace)
+dcontrol <- c(abs.tol = abs.tol, rel.tol =
+        rel.tol, x.tol = x.tol, step.min =
+        step.min, step.max = step.max,
+        sing.step = sing.step, sing.tol =
+        sing.tol, scale.tol = scale.tol,
+        scale.mod = scale.mod, scale.fac =
+        scale.fac, diff.grad = diff.grad)
+list(icontrol = icontrol, dcontrol = dcontrol)
+}
+The symbol.address function is a slight modification of the is.loaded S- PLUS function. It returns the addresses of a vector of symbols—zero means that the symbol is not currently loaded (or you didn’t get the symbol right).
+symbol.address
+function(symbol)
+{
+}
+symbol <- as.character(symbol)
+.C("S_get_entries",
+        symbol,
+        integer(length(symbol)),
+        length(symbol))[[2]]
+As a test, I use a computer intensive way of calculating two means. At this stage of testing, we really do want to know the right answer beforehand.
+double
+jjtest1(pars, n)
+long *n;
+double *pars;
+{
+}
+long i;
+double dif, ans=0.0;
+static double data[6] = { 3.4, 6.3, 9.2, -.7, 2.1, 8.8};
+for(i=0; i < 3; i++) {
+        dif = data[i] - pars[0];
+        ans = ans + dif * dif;
+}
+for(i=3; i < 6; i++) {
+        dif = data[i] - pars[1];
+        ans = ans + dif * dif;
+}
+return(ans);
+Now compile the code, dyn load it and use it in the optimization function. S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+14.4. OPTIMIZATION VIA PORT 343
+> !Splus COMPILE jjtest1.c
+targets= jjtest1.o
+make -f /usr/lang/sp/newfun/lib/S_makefile  jjtest1.o
+cc -c -I${SHOME-‘Splus SHOME‘}/include -O2   jjtest1.c
+> dyn.load("jjtest1.o")
+> portopt1(symbol.address(symbol.C("jjtest1")), c(0,0))
+iter: 0  objective: 218.23
+iter: 1  objective: 178.277
+iter: 2  objective: 64.48
+iter: 3  objective: 64.48
+$parameters:
+[1] 6.300002 3.400020
+$objective:
+[1] 64.48
+$limits:
+        [,1]   [,2]
+lower -1e+30 -1e+30
+upper  1e+30  1e+30
+$convergence:
+[1] "relative function convergence"
+$call:
+portopt1(fun.address = symbol.address(symbol.C(
+        "jjtest1")), start = c(0, 0))
+> 10.2/3
+[1] 3.4
+> 18.9/3
+[1] 6.3
+The answers are correct, and the algorithm converged okay.
+If you were paying attention, then you have already chastised me for passing a pointer for the parameter length in the calls to the function to be optimized in portopt one Sp. It is true that this is a little unnatural in C, but it allows Fortran to be used as well as C. Here is the test function translated into Fortran.
+        function jjtest2(pars, n)
+        implicit none
+        integer n
+        double precision pars(n)
+        integer i
+        double precision dif, jjtest2, tdat(6)
+        tdat(1) = 3.4
+        tdat(2) = 6.3
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+￼￼
+344
+CHAPTER 14. FUNCTIONS
+10
+20
+        jjtest2 = jjtest2 + dif * dif
+continue
+do 20 i=4, 6
+        dif = tdat(i) - pars(2)
+        jjtest2 = jjtest2 + dif * dif
+continue
+return end
+tdat(3) = 9.2
+tdat(4) = -.7
+tdat(5) = 2.1
+tdat(6) = 8.8
+jjtest2 = 0.0
+do 10 i=1, 3
+        dif = tdat(i) - pars(1)
+It is used like:
+> portopt1(symbol.address(symbol.For("jjtest2")), c(0,0))
+I foresee portopt1—if it is useful at all—not being used much directly, but put into a function that insures that the code computing a specific function is loaded and then calls portopt1.
+General interface
+The portoptgen function provides a way to build an S function that minimizes a function in a compiled language that has several arguments. For example, a C function that not only has a vector of parameters over which to be optimized, but data inputs also. portoptgen creates a file of C code containing a function to be called by the .C function, and returns an S function that makes that call. Let’s start with an example, and go through how it works later.
+The C function jjtest3 is the function that we want to minimize. This, like the code in the last subsection, is a computationally intensive way to find the means of numbers in some groups. However, in this case it is much more flexible in what it can do.
+> !cat jjtest3.c
+#include <S.h>
+double
+jjtest3(pars, n, lengs, data)
+long n, *lengs;
+double *pars, *data;
+{
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+14.4. OPTIMIZATION VIA PORT 345 long i, j, count=0, top_count=0;
+}
+double dif, ans=0.0;
+for(i=0; i < n; i++) {
+        top_count += lengs[i];
+        for(j=count; j < top_count; j++) {
+                dif = data[j] - pars[i];
+                ans = ans + dif * dif;
+        count = top_count;
+}
+return(ans);
+}
+This function has arguments that are the array of parameters over which the optimization takes place (they will be the means), the number of parameters, an array giving the number of points in each group, and an array containing all of the data. Now that we know what the function looks like, we are ready to use portoptgen.
+> fjjtest3 <- portoptgen("jjtest3", c(v.2="double", n="long",
+       lengs="long", data = "double"), nonpo="n", make="n")
+Creating file port_opt_jjtest3.c
+The first argument to portoptgen is the name of the function to minimize. The second argument is a character vector containing the declarations for the argu- ments to the function—these can either be C declarations (“long”, for example), or S storage modes (“integer”). The names of this vector are used by S and C as variable names. This call also uses two of the optional arguments.
+Since n in jjtest3 is not a pointer, we indicate that in the nonpointers argument to portoptgen. All of the variables are presumed to be passed by address into the C function unless noted in nonpointers. In general, it is not a good idea to force users into a double negative as in nonpointer=F means “pointer”. It makes it more confusing, and hence more likely that bugs will occur. But in this case the ease of use overrules this—in my mind, at least. An improvement would be to find a better name in place of “nonpointer”.
+The n variable is also in the make argument to portoptgen. This is merely the length of the vector of parameters, so we don’t want to have this as an argument to the S function—S can assign it within the function. Arguments that are in make are not arguments to the S function that is created (hence they need to be made inside the function).
+In the call to portoptgen above, two things happened: the S function was put into fjjtest3, and a file of C code was created. Here is the top of the file of C code.
+> !head -20 port_opt_jjtest3.c
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+346 CHAPTER 14. FUNCTIONS
+#include <S.h>
+void
+port_opt_jjtest3_Sp(liv, lv, iv, v, icontrol, objective, limits, scale,
+v_2, n, lengs, data
+)
+long *liv, *lv, *iv, *icontrol;
+double *v, *objective, *limits, *scale;
+double *v_2;
+long *n;
+long *lengs;
+double *data;
+{
+        long i, iter_max = iv[17], trace = icontrol[3], iternum=-1;
+        long *npar = icontrol;
+        extern double jjtest3();
+        if(iter_max) {
+                F77_CALL(mnb0)(npar, v_2, scale, limits,
+                        objective, liv, iv, lv, v);
+                *objective = jjtest3(v_2, *n, lengs, data);
+                if(is_na(objective, DOUBLE) ||
+It is a function that is called by fjjtest3 through .C. The arguments to jjtest3 are passed in along with the other arguments needed for the optimizer, and the call to jjtest3 is done correctly. There is nothing that needs to be done to this except compiling it. (Note that v.2 is translated to v 2 in C.)
+The S function that portoptgen returns does usually need a little work before it is usable. Comments at the top indicate what needs to be done.
+> fjjtest3
+function(v.2 = NULL, lengs = NULL, data = NULL, lower
+         =  - Inf, upper = Inf, scale = 1, control =
+        portopt.control(...), ...)
+{
+# need to ensure that jjtest3 is loaded, possibly with
+# if(!is.loaded(symbol.C(’jjtest3’)))
+#     dyn.load(’jjtest3.o’)
+#
+# need to ensure that port_opt_jjtest3_Sp is loaded, possibly with
+# if(!is.loaded(symbol.C(’port_opt_jjtest3_Sp’)))
+#     dyn.load(’port_opt_jjtest3.o’)
+#
+# need to fix up n
+        p <- length(v.2)
+        if(length(scale) != 1 && length(scale) != p)
+                stop("bad length for ’scale’ argument")
+...
+(There is lots more of the function.) In a lot of situations, you can probably just S Poetry ⃝c 1998 Patrick J. Burns v1.0
+￼
+14.4. OPTIMIZATION VIA PORT 347
+uncomment the lines involving dyn.load to take care of the issue of loading. Any variable that appears in the make argument to portoptgen will need to be taken care of. The function as returned by portoptgen will create an error when any of these is attempted to be used (in the .C call). It would usually be good form to make the arguments to the S function that are also arguments to cfun be required arguments—that is, remove the NULL default value.
+Once the S function editing is done and the C code compiled, we can compute our means.
+> fjjtest3(c(1, 3), c(3, 5), 1:8)
+iter: 0  objective: 60
+iter: 1  objective: 34.329
+iter: 2  objective: 24.1624
+iter: 3  objective: 12
+iter: 4  objective: 12
+iter: 5  objective: 12
+$parameters:
+[1] 2.000000 5.999999
+$objective:
+[1] 12
+$limits:
+        [,1]   [,2]
+lower -1e+30 -1e+30
+upper  1e+30  1e+30
+$convergence:
+[1] "relative function convergence"
+$call:
+fjjtest3(v.2 = c(1, 3), lengs = c(3, 5), data = 1:8)
+Here are all of the arguments to portoptgen.
+> args(portoptgen)
+function(cfun, args, make = F, nonpointers = F,
+        parameter = 1, fortran = F)
+NULL
+There are two that we haven’t discussed yet. The parameter argument indicates which argument to cfun is the one over which optimization is to occur. As you might guess, the fortran argument is a logical that tells whether cfun is Fortran or C.
+DANGER. The return value of the cfun function that portoptgen uses must be double precision.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+￼
+348 CHAPTER 14. FUNCTIONS
+Now, how it all works. The first ingredient is an object that contains the template for the C code. Here are the first few elements of it.
+> portoptgen.ctemplate[1:16]
+ [1] "#include <S.h>"
+ [2] "void"
+ [3] "port_opt_cFsUF_Sp(liv, lv, iv, v, icontrol, obje
+ctive, limits, scale, "
+ [4] "cFaRGS"
+ [5] ")"
+ [6] "long *liv, *lv, *iv, *icontrol;"
+ [7] "double *v, *objective, *limits, *scale;"
+ [8] "cFdEC"
+ [9] "{"
+[10] "\tlong i, iter_max = iv[17], trace = icontrol[3],
+iternum=-1;"
+[11] "\tlong *npar = icontrol;"
+[12] "\textern double cFfUNDEC();"
+[13] "\tif(iter_max) {"
+[14] "\t\tF77_CALL(mnb0)(npar, cFpAR, scale, limits,"
+[15] "\t\t\tobjective, liv, iv, lv, v);"
+[16] "\t\t*objective = cFcALL"
+This should be familar from the C code shown above except that there are funny bits like “cFsUF”. These will be replaced with text that depends on the function that is being optimized.
+The portoptgen.ctemplate object was created by typing in a file, then— when it was correct—reading it into S with the command:
+portoptgen.ctemplate <- scan("portopt_gen.c",
+       what = "", sep = "\n")
+The only trick is that you want to have a double backslash in the file anywhere that you would have a backslash in C.
+Another ingredient is portoptgen.stemplate. This is the model on which the return value of portoptgen is built. It is quite similar to the portopt1 function.
+Here is the definition of portoptgen.
+> portoptgen
+function(cfun, args, make = F, nonpointers = F, parameter = 1, fortran = F)
+{
+        if(!is.character(cfun) || length(cfun) > 1)
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+￼
+14.4. OPTIMIZATION VIA PORT 349
+                stop("cfun must be a single string")
+        if(fortran)
+                nonpointers <- F
+        bnam <- paste("v", 1:length(args), sep = "")
+        if(!length(anam <- names(args)))
+else {
+names(args) <- bnam
+nonam <- nchar(anam) == 0
+names(args)[nonam] <- bnam[nonam]
+}
+if(any(is.na(match(args, c("double", "single", "float", "integer",
+        "long", "character", "char", "complex"), nomatch = NA))))
+        stop("bad type in ’args’ argument")
+cargs <- args
+cam <- match(cargs, c("single", "integer", "character"), nomatch = 0)
+if(any(cam)) {
+        cargs[cam == 1] <- "float"
+        cargs[cam == 2] <- "long"
+        cargs[cam == 3] <- "char"
+}
+names(cargs) <- transcribe(names(cargs), ".", "_")
+if(any(duplicated(names(cargs))))
+        stop("duplicated names in arguments")
+c.outnames <- c("lv", "liv", "v", "iv", "icontrol", "objective",
+        "scale", "limits")
+if(sum(match(names(cargs), c.outnames, nomatch = 0)))
+        stop(paste("Can’t have C argument names in:", paste(c.outnames,
+                collapse = ", ")))
+sargs <- cargs
+sam <- match(sargs, c("float", "long", "char"), nomatch = 0)
+sargs[sam == 1] <- "single"
+sargs[sam == 2] <- "integer"
+sargs[sam == 3] <- "character"
+names(sargs) <- transcribe(names(sargs), "_", ".")
+arglen <- length(args)
+switch(mode(make),
+        logical = {
+                make <- rep(make, length = arglen)
+        }
+        ,
+        character = {
+                maknam <- make
+                make <- rep(F, arglen)
+                names(make) <- names(args)
+                make[maknam] <- T
+                if(length(make) != arglen)
+                        stop("bad input for make")
+        }
+        ,
+        stop("invalid input for make"))
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+350
+CHAPTER 14. FUNCTIONS
+names(make) <- names(sargs)
+if(is.numeric(parameter))
+        parameter <- names(sargs)[parameter]
+else if(!match(parameter, names(sargs), nomatch = 0)) {
+        par.m <- match(parameter, names(args), nomatch = NA)
+        if(is.na(par.m))
+                stop("bad value for ’parameter’ argument")
+        parameter <- names(sargs)[par.m]
+}
+if(sargs[parameter] != "double")
+        stop("parameters need to be double precision")
+if(make[parameter])
+        stop("parameter must be passed in, not made")
+switch(mode(nonpointers),
+        logical = {
+                nonpointers <- rep(nonpointers, length = arglen)
+        }
+        ,
+        character = {
+                pointnam <- nonpointers
+                nonpointers <- rep(F, arglen)
+                names(nonpointers) <- names(args)
+                nonpointers[pointnam] <- T
+                if(length(nonpointers) != arglen)
+                        stop("bad input for nonpointers")
+        }
+        ,
+        stop("invalid input for nonpointers"))  #
+#
+# create and modify file of C code
+#
+        cfile.name <- paste("port_opt_", cfun, ".c", sep = "")
+        cfile.test <- filetest(cfile.name, dir = T, wr = T, r = T)
+        if(cfile.test["exists"]) {
+}
+else {
+if(cfile.test["dir"])
+        stop(paste(cfile.name, "is a directory"))
+if(!cfile.test["wr"])
+        stop(paste(cfile.name, "is unwriteable"))
+if(!cfile.test["read"])
+        stop(paste(cfile.name, "is unreadable"))
+cat("Overwriting file", cfile.name, "\n")
+cat("Creating file", cfile.name, "\n")
+}
+cfun.args <- paste(names(cargs), collapse = ", ")
+cfun.dec <- paste(cargs, " *", names(cargs), ";", sep = "", collapse =
+        "\n")
+if(fortran)
+        cfun.cn <- paste("F77_CALL(", cfun, ")", sep = "")
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+14.4. OPTIMIZATION VIA PORT 351
+        else cfun.cn <- cfun
+        cfun.call <- paste(cfun.cn, "(", paste(ifelse(nonpointers, "*", ""),
+                names(cargs), sep = "", collapse = ", "), ");", sep = "")
+        cfun.par <- names(cargs)[match(parameter, names(sargs))]
+        cat(portoptgen.ctemplate, file = cfile.name, sep = "\n")
+        substifile(cfile.name, "cFaRGS", cfun.args)
+        substifile(cfile.name, "cFdEC", cfun.dec)
+        substifile(cfile.name, "cFcALL", cfun.call)
+        substifile(cfile.name, "cFpAR", cfun.par)
+        substifile(cfile.name, "cFfUNDEC", cfun.cn)
+        substifile(cfile.name, "cFsUF", cfun)   #
+#
+# get S function right
+#
+        new.sargs <- names(sargs)[!make]
+        ans <- portoptgen.stemplate
+        ans.len <- length(ans)
+        ans[[c(ans.len, 1, 2, 2)]] <- as.name(parameter)
+        the.comm <- c(paste("# need to ensure that", cfun,
+                "is loaded, possibly with"), paste("# if(!is.loaded(symbol.",
+                if(fortran) "For" else "C", "(’", cfun, "’)))", sep = ""),
+                paste("#     dyn.load(’", cfun, ".o’)", sep = ""), "# ", paste(
+                "# need to ensure that port_opt_", cfun,
+                "_Sp is loaded, possibly with", sep = ""), paste(
+                "# if(!is.loaded(symbol.C(’port_opt_", cfun, "_Sp’)))", sep =
+                ""), paste("#     dyn.load(’", substring(cfile.name, 1, nchar(
+                cfile.name) - 1), "o’)", sep = ""))
+        if(any(make)) {
+                the.comm <- c(the.comm, "# ", paste("# need to fix up", names(
+                        make)[make]))
+        }
+        the.comm <- eval(parse(text = c("function() {", the.comm, "}")))
+        ans[[ans.len]] <- c(the.comm[[1]], ans[[ans.len]])
+        new.fun <- vector("function", length(new.sargs) + 1)
+        names(new.fun) <- c(new.sargs, "")
+        ans <- c(new.fun[ - length(new.fun)], ans)
+        the.dotC <- expression(ans <- .C("portopt_one_Sp",
+                as.integer(liv),
+                as.integer(lv),
+                iv = as.integer(init$iv),
+                v = as.double(init$v),
+                as.integer(icontrol),
+                objective = double(1),
+                limits = limits,
+                scale = as.double(scale))[c("parameters", "objective", "iv",
+                "limits")])
+        new.dotC <- as.call(parse(text = paste("foo(", paste(names(sargs), "=",
+                ifelse(make, paste("stop(’fix up", names(sargs), "’)"), paste(
+                "as.", sargs, "(", names(sargs), ")", sep = "")), collapse =
+                ", "), ")")))
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+352
+CHAPTER 14. FUNCTIONS
+names(new.dotC[[1]])[match(parameter, names(new.dotC[[1]]))] <-
+        "parameters"
+the.dotC[[c(1, 2, 2)]] <- c(the.dotC[[c(1, 2, 2)]], new.dotC[[1]][-1])
+the.dotC[[c(1, 2, 2, 2)]] <- paste("port_opt_", cfun, "_Sp", sep = "")
+ans.len <- length(ans)
+dotC.num <- match("the..C.call", as.character(ans[[length(ans)]]))
+ans[[c(ans.len, dotC.num)]] <- the.dotC[[1]]
+ans }
+There’s a lot to explain here—we’ll just go in order. The first section makes sure that the arguments are right, or can be fixed up to be right. All of the error creation is near the top of the function. In general this is a good idea so that the user doesn’t need to wait around merely to be told that there was an error. In this case it is more than a good idea because we don’t want to have the side effect of creating a permanent file, and then abort the function.
+The second section builds the C code. It starts out by testing if the file that would be used is suitable—this uses filetest of page 162. Then the template is catted into the file, the required strings pasted together, and then substituted into the file with substifile of page 277.
+The last section creates the S function to be returned. Here we come across the statement:
+        ans.len <- length(ans)
+        ans[[c(ans.len, 1, 2, 2)]] <- as.name(parameter)
+Subscripting with a vector or list inside [[ is described on page 203. The first few lines of portoptgen.stemplate (which is the same as ans here) are:
+function(lower =  - Inf, upper = Inf, scale = 1,
+        control = portopt.control(...), ...)
+{
+        p <- length(This.Should.Be.Gone)
+        if(length(scale) != 1 && length(scale) != p)
+Recall that the last component of a function is the body of the function. So the replacement into ans is picking out the second part of the second part of the first statement in ans, and putting in the name of the parameter.
+Next comes the.comm which creates the comments at the start of the ans that is returned. the.comm starts out life as a character vector that has been pasted together. It is then pasted some more, parsed, and evaluated to form a function. This move to a function is basically so we have a container to hold the comments—they tend to run through your hands if you don’t have a proper bucket. Next the two objects of mode “brace” are concatenated together with c to form the new body of ans.
+Now comes:
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+14.5. THINGS TO DO 353
+        new.fun <- vector("function", length(new.sargs) + 1)
+        names(new.fun) <- c(new.sargs, "")
+        ans <- c(new.fun[ - length(new.fun)], ans)
+This creates a function that has arguments that are those that we want to add to the answer. Then the two functions are concatenated together, except that we take away the body of new.fun.
+The final task to accomplish is to create the correct call to .C and place it in ans. This follows the same pattern—we want to add to a call, so we create another call and use c to combine them. Placing the call to .C is easy since the spot in ans where it should go is the character string "the..C.call".
+If gradients or Hessians are computable, then portopt1 and portoptgen can be modified to use different PORT routines.
+14.5 Things to Do
+Add an integration method to line.integral.
+Write a function similar to interpolate.lagrange or portoptgen that creates
+functions that perform some other task.
+Rewrite genopt so that births, jittering, and so on are all abstracted (there are separate functions for each).
+Design a genetic algorithm for an optimization problem that you have.
+14.6 Further Reading
+You can learn about integration in the complex plane from a text on complex analysis, one that I happen to have is Bak and Newman (1982) Complex Anal- ysis. Discussions of numerical integration are in numerical analysis books. One such book is Mathews (1987).
+Interpolation is discussed in many numerical analysis books, for example, Hildebrand (1974) Introduction to Numerical Analysis.
+A good source on genetic algorithms is D. E. Goldberg (1989) Genetic Algo- rithms in Search, Optimization & Machine Learning. I also like his article (1989) “Zen and the art of genetic algorithms.” John Holland introduced genetic algo- rithms; his book is (1975) Adaptation in Natural and Artificial Systems.
+Gay (1990) gives details about how to use some of the PORT routines, but I haven’t found anything that gives a good explanation of how the optimization is performed.
+S Poetry ⃝c 1998 Patrick J. Burns v1.0
+
+354
+14.7 Quotations
+37May Swenson “Question”

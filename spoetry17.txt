@@ -1,0 +1,36 @@
+S POETRY
+by Patrick J. Burns
+
+Epilogue
+
+If I’ve convinced you that abstraction and consistency are your friends, that redundancy is your enemy, that artistry in programming is worth seeking — that is, if you have become a proud, lazy, impatient, distrustful simpleton — then in some measure I have succeeded. it’s not elves exactly [39]
+
+It is no accident that abstraction is given top billing in the previous para- graph. Unix is a powerful operating system because it has simple but general abstractions. C has become a major programming language because it has efficient abstractions that allow the user effective control of the machine. Your code, too, can be potent if you create the right abstractions. Perhaps I haven’t mentioned abstraction enough. Abstraction, abstraction, abstraction.
+
+So, what are the steps of programming?
+
+• Think about what functionality is desirable. Then think about how to generalize that.
+
+• Find algorithms that are as simple and general as possible.
+
+• Implement the algorithms as simply and generally as you can.
+
+• Document your code clearly and completely.
+
+• Figure out how to test your code thoroughly.
+
+• Write a verification suite.
+
+• Put your code, documentation and tests under a source code control scheme. 
+
+• Revise as necessary.
+
+Notice that the actual code generation is but a fraction of the time involved (unless perhaps you are just learning the language). It isn’t hard to get something to happen, but it can be devilish to get the right thing to happen.
+
+q()
+
+or just some human sleep [40]
+
+Quotations
+[39] Robert Frost “Mending Wall”
+[40] Robert Frost “After Apple Picking”
